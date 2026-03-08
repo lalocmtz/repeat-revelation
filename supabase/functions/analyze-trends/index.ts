@@ -519,7 +519,7 @@ serve(async (req) => {
     // Step 5: Analyze trends for each team
     const allOpportunities: Opportunity[] = [];
     for (const stats of teamStatsMap.values()) {
-      const teamOpps = analyzeTeamTrends(stats, upcomingMatches);
+      const teamOpps = analyzeTeamTrends(stats, upcomingMatches, matchOddsMap);
       allOpportunities.push(...teamOpps);
     }
 
