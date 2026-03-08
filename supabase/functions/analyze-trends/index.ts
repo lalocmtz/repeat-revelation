@@ -164,7 +164,7 @@ function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>):
 
     // Win streak (home context)
     const homeMatches = sample.filter((m) => m.isHome);
-    if (homeMatches.length >= 3) {
+    if (homeMatches.length >= 2) {
       const homeWins = homeMatches.filter((m) => m.won).length;
       if (homeWins >= Math.ceil(homeMatches.length * 0.75)) {
         opps.push({
