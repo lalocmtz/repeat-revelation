@@ -14,6 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      matches_history: {
+        Row: {
+          away_score: number | null
+          away_team_id: number
+          away_team_name: string
+          btts: boolean | null
+          created_at: string
+          home_score: number | null
+          home_team_id: number
+          home_team_name: string
+          id: number
+          league_id: number
+          league_name: string | null
+          match_date: string
+          match_time: string | null
+          status: string | null
+          total_goals: number | null
+          updated_at: string
+        }
+        Insert: {
+          away_score?: number | null
+          away_team_id: number
+          away_team_name: string
+          btts?: boolean | null
+          created_at?: string
+          home_score?: number | null
+          home_team_id: number
+          home_team_name: string
+          id: number
+          league_id: number
+          league_name?: string | null
+          match_date: string
+          match_time?: string | null
+          status?: string | null
+          total_goals?: number | null
+          updated_at?: string
+        }
+        Update: {
+          away_score?: number | null
+          away_team_id?: number
+          away_team_name?: string
+          btts?: boolean | null
+          created_at?: string
+          home_score?: number | null
+          home_team_id?: number
+          home_team_name?: string
+          id?: number
+          league_id?: number
+          league_name?: string | null
+          match_date?: string
+          match_time?: string | null
+          status?: string | null
+          total_goals?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      opportunities: {
+        Row: {
+          computed_at: string
+          context: string | null
+          created_at: string
+          description: string
+          expires_at: string
+          hits: number
+          id: string
+          is_hot: boolean | null
+          league_id: number
+          league_name: string
+          market: string
+          next_match_away: string | null
+          next_match_home: string | null
+          next_match_id: number | null
+          next_match_time: string | null
+          odds: number | null
+          pattern_type: string
+          sample: number
+          strength: number | null
+          team_id: number
+          team_name: string
+        }
+        Insert: {
+          computed_at?: string
+          context?: string | null
+          created_at?: string
+          description: string
+          expires_at?: string
+          hits: number
+          id?: string
+          is_hot?: boolean | null
+          league_id: number
+          league_name: string
+          market: string
+          next_match_away?: string | null
+          next_match_home?: string | null
+          next_match_id?: number | null
+          next_match_time?: string | null
+          odds?: number | null
+          pattern_type: string
+          sample: number
+          strength?: number | null
+          team_id: number
+          team_name: string
+        }
+        Update: {
+          computed_at?: string
+          context?: string | null
+          created_at?: string
+          description?: string
+          expires_at?: string
+          hits?: number
+          id?: string
+          is_hot?: boolean | null
+          league_id?: number
+          league_name?: string
+          market?: string
+          next_match_away?: string | null
+          next_match_home?: string | null
+          next_match_id?: number | null
+          next_match_time?: string | null
+          odds?: number | null
+          pattern_type?: string
+          sample?: number
+          strength?: number | null
+          team_id?: number
+          team_name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
