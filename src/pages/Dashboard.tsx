@@ -5,7 +5,6 @@ import FiltersBar from "@/components/dashboard/FiltersBar";
 import MarketTabs from "@/components/dashboard/MarketTabs";
 import PatternTable from "@/components/dashboard/PatternTable";
 import BetSlip from "@/components/dashboard/BetSlip";
-import TerminalBar from "@/components/dashboard/TerminalBar";
 import { mockPatterns, type Pattern } from "@/data/mockPatterns";
 import { useAuth } from "@/contexts/AuthContext";
 import { Zap, Lock } from "lucide-react";
@@ -37,10 +36,7 @@ const Dashboard = () => {
   };
 
   const slipIds = slipSelections.map((s) => s.id);
-
-  // Show only first 3 patterns for free users
   const visiblePatterns = isPremium ? filteredPatterns : filteredPatterns.slice(0, 3);
-
   const showOverlay = !loading && (!user || !isPremium);
 
   return (
@@ -49,7 +45,6 @@ const Dashboard = () => {
       <FiltersBar activeTime={activeTime} onTimeChange={setActiveTime} />
 
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">
           <MarketTabs activeTab={activeTab} onTabChange={setActiveTab} />
           <PatternTable
@@ -59,29 +54,31 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Bet Slip sidebar */}
+        {/* Desktop BetSlip sidebar */}
         {isPremium && (
-          <BetSlip selections={slipSelections} onRemove={handleRemoveFromSlip} />
+          <div className="hidden md:block">
+            <BetSlip selections={slipSelections} onRemove={handleRemoveFromSlip} />
+          </div>
         )}
 
         {/* Premium overlay */}
         {showOverlay && (
           <div className="absolute inset-0 top-[50%] z-30 flex items-end justify-center">
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent" />
-            <div className="relative z-10 mb-16 flex flex-col items-center gap-4 text-center px-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
-                <Lock className="h-6 w-6 text-primary" />
+            <div className="relative z-10 mb-12 md:mb-16 flex flex-col items-center gap-3 text-center px-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+                <Lock className="h-5 w-5 text-primary" />
               </div>
-              <h3 className="text-xl font-bold text-foreground">
+              <h3 className="text-lg md:text-xl font-bold text-foreground">
                 Desbloquea todos los patrones
               </h3>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Obtén acceso a oportunidades ilimitadas, filtros avanzados, Bet Slip y mucho más con Tiplives Pro.
+                Acceso a oportunidades ilimitadas, filtros avanzados, Bet Slip y más.
               </p>
-              <Button variant="hero" size="lg" className="rounded-full px-8 gap-2" asChild>
+              <Button variant="hero" size="lg" className="rounded-full px-6 gap-2" asChild>
                 <Link to="/pricing">
                   <Zap className="h-4 w-4" />
-                  Obtener acceso Pro — $25/mes
+                  Obtener Pro — $25/mes
                 </Link>
               </Button>
             </div>
@@ -89,7 +86,12 @@ const Dashboard = () => {
         )}
       </div>
 
-      <TerminalBar />
+      {/* Mobile BetSlip bottom sheet - only for premium users */}
+      {isPremium && (
+        <div className="md:hidden">
+          <BetSlip selections={slipSelections} onRemove={handleRemoveFromSlip} />
+        </div>
+      )}
     </div>
   );
 };

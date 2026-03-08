@@ -1,4 +1,4 @@
-import { ChevronDown, Globe, Target, LayoutGrid } from "lucide-react";
+import { Globe, ChevronDown } from "lucide-react";
 
 interface FiltersBarProps {
   activeTime: string;
@@ -9,14 +9,14 @@ const timeOptions = ["Hoy", "Mañana", "3 Días"];
 
 const FiltersBar = ({ activeTime, onTimeChange }: FiltersBarProps) => {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-border px-6 py-3">
+    <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 overflow-x-auto scrollbar-hide">
       {/* Time pills */}
-      <div className="flex items-center rounded-full border border-border bg-card p-0.5">
+      <div className="flex items-center rounded-full border border-border bg-card p-0.5 shrink-0">
         {timeOptions.map((t) => (
           <button
             key={t}
             onClick={() => onTimeChange(t)}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
               activeTime === t
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -27,35 +27,12 @@ const FiltersBar = ({ activeTime, onTimeChange }: FiltersBarProps) => {
         ))}
       </div>
 
-      {/* Dropdowns */}
-      <button className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+      {/* Leagues dropdown */}
+      <button className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0">
         <Globe className="h-3.5 w-3.5" />
-        Leagues
+        Ligas
         <ChevronDown className="h-3 w-3" />
       </button>
-
-      <button className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <Target className="h-3.5 w-3.5" />
-        Context
-        <ChevronDown className="h-3 w-3" />
-      </button>
-
-      <button className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <LayoutGrid className="h-3.5 w-3.5" />
-        Sample (15)
-        <ChevronDown className="h-3 w-3" />
-      </button>
-
-      {/* Odds range */}
-      <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs text-muted-foreground">
-        <span>ODDS</span>
-        <div className="flex items-center gap-1">
-          <div className="h-1.5 w-24 rounded-full bg-secondary">
-            <div className="h-full w-3/4 rounded-full bg-primary" />
-          </div>
-        </div>
-        <span className="font-mono">1.5 - 3.2</span>
-      </div>
     </div>
   );
 };
