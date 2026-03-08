@@ -437,6 +437,82 @@ serve(async (req) => {
       if (!upcomingMatches.has(m.away?.id)) upcomingMatches.set(m.away?.id, m);
     }
 
+    // Step 4b: Fetch real odds from bet365 for upcoming matches
+    // Map: matchId -> { over25, over15, btts, homeWin, ... }
+    const matchOddsMap = new Map<number, Record<string, number>>();
+    const uniqueMatchIds = [...new Set(upcoming.map((m) => m.id).filter(Boolean))];
+    console.log(`Fetching odds for ${uniqueMatchIds.length} upcoming matches...`);
+
+    // Fetch odds in batches of 10
+    for (let i = 0; i < uniqueMatchIds.length; i += 10) {
+      const batch = uniqueMatchIds.slice(i, i + 10);
+      const oddsResults = await Promise.all(
+        batch.map((eventId) =>
+          rapidApiFetch(`/football-event-odds?eventid=${eventId}`, RAPIDAPI_KEY)
+            .then((data) => ({ eventId, data }))
+            .catch(() => ({ eventId, data: null }))
+        )
+      );
+
+      for (const { eventId, data } of oddsResults) {
+        if (!data?.response?.odds) continue;
+        const parsed: Record<string, number> = {};
+
+        for (const oddGroup of data.response.odds) {
+          const bookmakerId = oddGroup?.bookmakerId;
+          // Prefer bet365 (bookmakerId 2) but accept any
+          const isBet365 = bookmakerId === 2;
+          const items = oddGroup?.items || [];
+
+          for (const item of items) {
+            const marketName = (item?.name || "").toLowerCase();
+            const values = item?.values || [];
+
+            // Over/Under goals
+            if (marketName.includes("over/under") || marketName.includes("total goals")) {
+              for (const v of values) {
+                const label = (v?.name || "").toLowerCase();
+                const odd = parseFloat(v?.odd);
+                if (isNaN(odd)) continue;
+                if (label.includes("over 2.5") && (isBet365 || !parsed["over25"])) parsed["over25"] = odd;
+                if (label.includes("over 1.5") && (isBet365 || !parsed["over15"])) parsed["over15"] = odd;
+                if (label.includes("over 3.5") && (isBet365 || !parsed["over35"])) parsed["over35"] = odd;
+              }
+            }
+            // BTTS
+            if (marketName.includes("both teams") || marketName.includes("btts")) {
+              for (const v of values) {
+                const label = (v?.name || "").toLowerCase();
+                const odd = parseFloat(v?.odd);
+                if (isNaN(odd)) continue;
+                if ((label === "yes" || label.includes("yes")) && (isBet365 || !parsed["btts"])) parsed["btts"] = odd;
+              }
+            }
+            // Match result (1X2)
+            if (marketName.includes("full time") || marketName.includes("1x2") || marketName.includes("match result")) {
+              for (const v of values) {
+                const label = (v?.name || "").toLowerCase();
+                const odd = parseFloat(v?.odd);
+                if (isNaN(odd)) continue;
+                if ((label === "1" || label === "home") && (isBet365 || !parsed["homeWin"])) parsed["homeWin"] = odd;
+                if ((label === "2" || label === "away") && (isBet365 || !parsed["awayWin"])) parsed["awayWin"] = odd;
+              }
+            }
+          }
+        }
+
+        if (Object.keys(parsed).length > 0) {
+          matchOddsMap.set(eventId, parsed);
+        }
+      }
+
+      if (i + 10 < uniqueMatchIds.length) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    console.log(`Odds fetched for ${matchOddsMap.size} matches`);
+
     // Step 5: Analyze trends for each team
     const allOpportunities: Opportunity[] = [];
     for (const stats of teamStatsMap.values()) {
