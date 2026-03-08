@@ -1,4 +1,5 @@
 import { Plus, Flame } from "lucide-react";
+import { useOdds } from "@/contexts/OddsContext";
 import type { Pattern } from "@/data/mockPatterns";
 
 interface PatternTableProps {
