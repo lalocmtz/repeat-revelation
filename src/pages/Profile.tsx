@@ -37,9 +37,8 @@ const Profile = () => {
       });
   }, [user, navigate]);
 
-  const handleOddsChange = (format: OddsFormat) => {
+  const handleOddsChange = (format: "decimal" | "american") => {
     setOddsFormat(format);
-    localStorage.setItem("tiplives_odds_format", format);
     toast.success(`Formato de momios: ${format === "decimal" ? "Decimal" : "Americano"}`);
   };
 
