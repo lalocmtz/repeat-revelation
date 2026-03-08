@@ -100,7 +100,7 @@ interface Opportunity {
 function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>, matchOddsMap: Map<number, Record<string, number>>): Opportunity[] {
   const opps: Opportunity[] = [];
   const matches = stats.matches.slice(0, 20);
-  if (matches.length < 5) return opps; // Minimum 5 matches for quality
+  if (matches.length < 3) return opps; // Minimum 3 matches
 
   const nextMatch = upcomingMatches.get(stats.teamId);
   const nextMatchId = nextMatch?.id || null;
