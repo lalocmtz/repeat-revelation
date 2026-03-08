@@ -6,16 +6,16 @@ import { Link } from "react-router-dom";
 import { useEffect } from "react";
 
 const features = [
-  { name: "Patrones del día", free: true, pro: true },
-  { name: "Mercados disponibles", free: "2", pro: "Todos" },
-  { name: "Oportunidades visibles", free: "3", pro: "Ilimitadas" },
-  { name: "Filtros avanzados", free: false, pro: true },
-  { name: "Próximos 3 días", free: false, pro: true },
-  { name: "Detalle de oportunidad", free: false, pro: true },
-  { name: "Bet Slip / Parlay Builder", free: false, pro: true },
-  { name: "Favoritos", free: false, pro: true },
-  { name: "Formato de cuotas", free: "Decimal", pro: "Decimal / Americano" },
-  { name: "Alertas futuras", free: false, pro: true },
+  "Todos los patrones del día",
+  "Todos los mercados disponibles",
+  "Oportunidades ilimitadas",
+  "Filtros avanzados",
+  "Próximos 3 días",
+  "Detalle de oportunidad",
+  "Bet Slip / Parlay Builder",
+  "Favoritos",
+  "Formato Decimal / Americano",
+  "Alertas futuras",
 ];
 
 const FeatureValue = ({ value }: { value: boolean | string }) => {
