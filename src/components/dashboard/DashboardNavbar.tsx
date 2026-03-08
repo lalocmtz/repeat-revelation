@@ -38,10 +38,6 @@ const DashboardNavbar = () => {
               </Link>
             </div>
               </div>
-              <Button variant="ghost" size="icon" onClick={signOut} title="Cerrar sesión" className="h-8 w-8">
-                <LogOut className="h-3.5 w-3.5" />
-              </Button>
-            </div>
           ) : (
             <Button variant="hero" size="sm" className="rounded-full h-8 text-xs px-4" asChild>
               <Link to="/auth">Entrar</Link>
