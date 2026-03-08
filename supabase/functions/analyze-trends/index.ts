@@ -186,7 +186,7 @@ function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>, 
           next_match_home: nextMatchHome,
           next_match_away: nextMatchAway,
           next_match_time: nextMatchTime,
-          odds: 1.50,
+          odds: realOdds?.homeWin || 1.50,
         });
       }
     }
