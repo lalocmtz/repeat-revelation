@@ -113,7 +113,7 @@ function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>, 
 
   const realOdds = matchOddsMap.get(nextMatchId);
 
-  for (const sampleSize of [5, 10, 15, 20]) {
+  for (const sampleSize of [3, 5, 10, 15, 20]) {
     const sample = matches.slice(0, sampleSize);
     if (sample.length < sampleSize) continue;
 
