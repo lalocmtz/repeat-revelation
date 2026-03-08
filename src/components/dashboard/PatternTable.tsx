@@ -93,7 +93,7 @@ const PatternTable = ({ patterns, onAddToSlip, slipIds }: PatternTableProps) => 
               <div className="text-sm font-medium text-foreground">{p.nextMatch.home} vs {p.nextMatch.away}</div>
               <div className="text-xs text-muted-foreground">{p.matchTime}</div>
             </div>
-            <div className="text-center text-sm font-semibold text-foreground">{p.odds.toFixed(2)}</div>
+            <div className="text-center text-sm font-semibold text-foreground">{formatOdds(p.odds)}</div>
             <div className="flex items-center justify-center">
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                 p.hits / p.sample >= 0.9
