@@ -318,15 +318,25 @@ serve(async (req) => {
 
     console.log(`Stored ${historyRows.length} matches in history`);
 
-    // Step 3: Build team stats from matches_history
-    const { data: historyData, error: histError } = await supabase
-      .from("matches_history")
-      .select("*")
-      .eq("status", "finished")
-      .order("match_date", { ascending: false })
-      .limit(5000);
+    // Step 3: Build team stats from matches_history (paginate to get all rows)
+    let historyData: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error: histError } = await supabase
+        .from("matches_history")
+        .select("*")
+        .eq("status", "finished")
+        .order("match_date", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+      if (histError) throw histError;
+      if (!data || data.length === 0) break;
+      historyData.push(...data);
+      if (data.length < pageSize) break;
+      page++;
+    }
 
-    if (histError) throw histError;
+    console.log(`History rows loaded: ${historyData.length}`);
 
     // Group by team
     const teamStatsMap = new Map<number, TeamStats>();
