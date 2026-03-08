@@ -1,4 +1,5 @@
 import { Plus, Flame } from "lucide-react";
+import { useOdds } from "@/contexts/OddsContext";
 import type { Pattern } from "@/data/mockPatterns";
 
 interface PatternTableProps {
@@ -16,6 +17,8 @@ const typeColorMap: Record<string, string> = {
 };
 
 const PatternTable = ({ patterns, onAddToSlip, slipIds }: PatternTableProps) => {
+  const { formatOdds } = useOdds();
+
   return (
     <div className="flex-1 overflow-auto">
       {/* Desktop Header - hidden on mobile */}
@@ -52,7 +55,7 @@ const PatternTable = ({ patterns, onAddToSlip, slipIds }: PatternTableProps) => 
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
-                <span className="text-base font-bold text-foreground">{p.odds.toFixed(2)}</span>
+                <span className="text-base font-bold text-foreground">{formatOdds(p.odds)}</span>
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                   p.hits / p.sample >= 0.9
                     ? "bg-primary/15 text-primary"
@@ -90,7 +93,7 @@ const PatternTable = ({ patterns, onAddToSlip, slipIds }: PatternTableProps) => 
               <div className="text-sm font-medium text-foreground">{p.nextMatch.home} vs {p.nextMatch.away}</div>
               <div className="text-xs text-muted-foreground">{p.matchTime}</div>
             </div>
-            <div className="text-center text-sm font-semibold text-foreground">{p.odds.toFixed(2)}</div>
+            <div className="text-center text-sm font-semibold text-foreground">{formatOdds(p.odds)}</div>
             <div className="flex items-center justify-center">
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                 p.hits / p.sample >= 0.9
