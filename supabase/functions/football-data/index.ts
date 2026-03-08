@@ -19,7 +19,7 @@ async function rapidApiFetch(path: string, apiKey: string) {
     },
   });
   const text = await res.text();
-  console.log(`Response [${res.status}] for ${path}: ${text.substring(0, 500)}`);
+  console.log(`Response [${res.status}] for ${path}: ${text.substring(0, 300)}`);
   if (!res.ok) {
     throw new Error(`RapidAPI ${res.status}: ${text.substring(0, 200)}`);
   }
@@ -39,36 +39,36 @@ serve(async (req) => {
     const action = url.searchParams.get("action") || "discover";
 
     if (action === "discover") {
-      const endpoints = [
-        // Try different date formats for matches-by-date
-        "/football-get-matches-by-date?date=20260308",
-        "/football-get-matches-by-date?date=2026-3-8",
-        "/football-get-matches-by-date?date=03/08/2026",
-        // Try league-based endpoints  
-        "/football-get-all-league-matches?leagueid=47",
-        "/football-get-league-events?leagueid=47",
-        "/football-get-fixtures-list?leagueid=47",
-        // Odds endpoints
-        "/football-get-all-odds?eventid=12345",
-        "/football-event-odds?eventid=12345",
-        "/football-get-event-odds?eventid=12345",
-        // Stats
-        "/football-get-event-statistics?eventid=12345",
-        "/football-get-match-statistics?matchid=12345",
-        // Team-based
-        "/football-get-team-info?teamid=8456",
-        "/football-get-team-statistics?teamid=8456",
-        "/football-team-detail?teamid=8456",
-      ];
+      // First get today's matches
+      const matchesData = await rapidApiFetch("/football-get-matches-by-date?date=20260308", RAPIDAPI_KEY);
+      const matches = matchesData?.response?.matches || [];
+      
+      // Get a real match ID
+      const firstMatch = matches[0];
+      const matchId = firstMatch?.id;
+      
+      const results: Record<string, any> = {
+        matchCount: matches.length,
+        firstMatch: firstMatch ? JSON.stringify(firstMatch).substring(0, 500) : "none",
+        matchId,
+      };
 
-      const results: Record<string, any> = {};
+      if (matchId) {
+        // Test detail and odds with real match ID
+        const detailEndpoints = [
+          `/football-get-match-detail?matchid=${matchId}`,
+          `/football-event-odds?eventid=${matchId}`,
+          `/football-get-match-event?matchid=${matchId}`,
+          `/football-match-event?matchid=${matchId}`,
+        ];
 
-      for (const ep of endpoints) {
-        try {
-          const data = await rapidApiFetch(ep, RAPIDAPI_KEY);
-          results[ep] = { status: "ok", keys: Object.keys(data || {}), preview: JSON.stringify(data).substring(0, 500) };
-        } catch (e) {
-          results[ep] = { status: "error", message: e instanceof Error ? e.message : String(e) };
+        for (const ep of detailEndpoints) {
+          try {
+            const data = await rapidApiFetch(ep, RAPIDAPI_KEY);
+            results[ep] = { status: "ok", preview: JSON.stringify(data).substring(0, 500) };
+          } catch (e) {
+            results[ep] = { status: "error", message: e instanceof Error ? e.message : String(e) };
+          }
         }
       }
 
