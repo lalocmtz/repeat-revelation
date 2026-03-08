@@ -232,9 +232,9 @@ serve(async (req) => {
 
     console.log("=== Starting optimized trend analysis ===");
 
-    // Step 1: Fetch only 5 dates (3 past + today + tomorrow) — saves ~13 API calls
+    // Step 1: Fetch 9 dates (7 past + today + tomorrow) — balanced API usage
     const dates: string[] = [];
-    for (let i = 3; i >= -1; i--) {
+    for (let i = 7; i >= -1; i--) {
       dates.push(formatDate(new Date(Date.now() - i * 86400000)));
     }
 
