@@ -2,29 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
-interface OpportunityRow {
-  id: string;
-  team_id: number;
-  team_name: string;
-  league_id: number;
-  league_name: string;
-  pattern_type: string;
-  market: string;
-  description: string;
-  context: string;
-  hits: number;
-  sample: number;
-  strength: number;
-  next_match_id: number | null;
-  next_match_home: string | null;
-  next_match_away: string | null;
-  next_match_time: string | null;
-  odds: number;
-  is_hot: boolean;
-  computed_at: string;
-  expires_at: string;
-}
-
 function getTeamAbbr(name: string): string {
   if (!name) return "???";
   const abbrs: Record<string, string> = {
@@ -59,7 +36,7 @@ function mapTypeColor(type: string): string {
   }
 }
 
-function mapMarketTags(row: OpportunityRow): string[] {
+function mapMarketTags(row: { market: string }): string[] {
   const tags = ["Popular"];
   if (row.market === "Over 2.5") tags.push("Over 2.5");
   if (row.market === "Over 1.5") tags.push("Over 1.5");
@@ -71,7 +48,7 @@ function mapMarketTags(row: OpportunityRow): string[] {
   return tags;
 }
 
-function opportunityToPattern(row: OpportunityRow): Pattern {
+function opportunityToPattern(row: any): Pattern {
   const patternType = (["GOLES", "BTTS", "CORNERS", "RESULT", "CARDS"].includes(row.pattern_type)
     ? row.pattern_type
     : "GOLES") as Pattern["type"];
@@ -105,28 +82,37 @@ export function useFootballData() {
     setLoading(true);
     setError(null);
 
+    // Timeout after 8 seconds
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     try {
-      // Read pre-computed opportunities from the database
       const { data, error: dbError } = await supabase
         .from("opportunities")
         .select("*")
         .gt("expires_at", new Date().toISOString())
         .order("strength", { ascending: false })
-        .limit(50);
+        .limit(50)
+        .abortSignal(controller.signal);
+
+      clearTimeout(timeout);
 
       if (dbError) throw dbError;
 
       if (!data || data.length === 0) {
-        // No opportunities yet — trigger analysis or show message
         setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 24h.");
         setPatterns([]);
       } else {
-        const transformed = (data as unknown as OpportunityRow[]).map(opportunityToPattern);
-        setPatterns(transformed);
+        setPatterns(data.map(opportunityToPattern));
       }
     } catch (e) {
-      console.error("useFootballData error:", e);
-      setError(e instanceof Error ? e.message : "Error al cargar datos");
+      clearTimeout(timeout);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("La consulta tardó demasiado. Intenta de nuevo.");
+      } else {
+        console.error("useFootballData error:", e);
+        setError(e instanceof Error ? e.message : "Error al cargar datos");
+      }
       setPatterns([]);
     } finally {
       setLoading(false);
