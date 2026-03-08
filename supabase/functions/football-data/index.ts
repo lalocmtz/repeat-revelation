@@ -121,17 +121,21 @@ serve(async (req) => {
       const matchArrays = await Promise.all(matchPromises);
       let allMatches = matchArrays.flat();
 
-      // Filter to top leagues only, and exclude finished matches
-      const topLeagueMatches = allMatches.filter((m: any) => {
-        const inTopLeague = TOP_LEAGUE_IDS.has(m.leagueId);
-        const isFinished = m.status?.finished === true;
-        return inTopLeague && !isFinished;
-      });
-
-      // If no top-league upcoming matches, show all upcoming matches
-      const matchesToUse = topLeagueMatches.length > 0 
+      // Filter out cancelled matches
+      const validMatches = allMatches.filter((m: any) => !m.status?.cancelled);
+      
+      // Separate upcoming vs finished
+      const upcoming = validMatches.filter((m: any) => !m.status?.finished);
+      const finished = validMatches.filter((m: any) => m.status?.finished);
+      
+      // Prefer upcoming, fallback to recent finished
+      const pool = upcoming.length > 0 ? upcoming : finished.slice(-30);
+      
+      // Try top leagues first
+      const topLeagueMatches = pool.filter((m: any) => TOP_LEAGUE_IDS.has(m.leagueId));
+      const matchesToUse = topLeagueMatches.length >= 5 
         ? topLeagueMatches.slice(0, 30) 
-        : allMatches.filter((m: any) => !m.status?.finished).slice(0, 30);
+        : pool.slice(0, 30);
 
       // Fetch odds for up to 10 matches in parallel (to avoid rate limits)
       const matchesForOdds = matchesToUse.slice(0, 10);
