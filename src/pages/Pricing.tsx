@@ -18,20 +18,8 @@ const features = [
   "Alertas futuras",
 ];
 
-const FeatureValue = ({ value }: { value: boolean | string }) => {
-  if (typeof value === "string") {
-    return <span className="text-sm text-foreground">{value}</span>;
-  }
-  return value ? (
-    <Check className="h-4 w-4 text-primary" />
-  ) : (
-    <X className="h-4 w-4 text-muted-foreground/40" />
-  );
-};
-
 const Pricing = () => {
   useEffect(() => {
-    // Load Hotmart checkout widget
     if (!document.querySelector('script[src*="hotmart"]')) {
       const script = document.createElement("script");
       script.src = "https://static.hotmart.com/checkout/widget.min.js";
@@ -57,8 +45,8 @@ const Pricing = () => {
             </div>
             <span className="text-lg font-bold text-foreground">Betmatch</span>
           </Link>
-          <Link to="/dashboard">
-            <Button variant="outline" size="sm">Ir al Dashboard</Button>
+          <Link to="/auth">
+            <Button variant="outline" size="sm">Iniciar sesión</Button>
           </Link>
         </div>
       </nav>
@@ -68,57 +56,45 @@ const Pricing = () => {
           {/* Header */}
           <div className="mb-16 text-center">
             <Badge variant="outline" className="mb-4 border-primary/30 text-primary">
-              Precios simples
+              Acceso Premium
             </Badge>
             <h1 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">
-              Elige tu plan
+              Desbloquea el radar completo
             </h1>
             <p className="mx-auto max-w-lg text-muted-foreground">
-              Empieza gratis y desbloquea todo el radar de patrones cuando estés listo.
+              Un solo plan. Acceso total a todos los patrones, filtros y herramientas de Betmatch.
             </p>
           </div>
 
-          {/* Plan Cards */}
-          <div className="mx-auto grid max-w-4xl gap-8 md:grid-cols-2">
-            {/* Free Plan */}
-            <Card className="relative border-border bg-card">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl text-foreground">Free</CardTitle>
-                <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">$0</span>
-                  <span className="text-muted-foreground"> / mes</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Explora patrones básicos sin compromiso.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <Link to="/dashboard">
-                  <Button variant="outline" className="w-full">
-                    Empezar gratis
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Pro Plan */}
+          {/* Single Pro Card */}
+          <div className="mx-auto max-w-md">
             <Card className="relative border-primary/40 bg-card shadow-lg shadow-primary/5">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <Badge className="bg-primary text-primary-foreground">
-                  <Zap className="mr-1 h-3 w-3" /> Más popular
+                  <Zap className="mr-1 h-3 w-3" /> Acceso completo
                 </Badge>
               </div>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl text-foreground">Pro</CardTitle>
+              <CardHeader className="pb-4 text-center">
+                <CardTitle className="text-2xl text-foreground">Pro</CardTitle>
                 <div className="mt-4">
-                  <span className="text-4xl font-bold text-foreground">$19</span>
+                  <span className="text-5xl font-bold text-foreground">$25</span>
                   <span className="text-muted-foreground"> / mes</span>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Acceso completo al radar de patrones tácticos.
                 </p>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
+                {/* Features list */}
+                <ul className="space-y-3">
+                  {features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-3">
+                      <Check className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="text-sm text-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
                 <a
                   onClick={() => false}
                   href="https://pay.hotmart.com/U101118131Q?checkoutMode=2"
@@ -126,41 +102,11 @@ const Pricing = () => {
                 >
                   <Button variant="hero" className="w-full gap-2">
                     <Zap className="h-4 w-4" />
-                    Obtener Pro
+                    Obtener acceso Pro
                   </Button>
                 </a>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Comparison Table */}
-          <div className="mx-auto mt-16 max-w-3xl">
-            <h2 className="mb-8 text-center text-2xl font-bold text-foreground">
-              Comparación de planes
-            </h2>
-            <div className="overflow-hidden rounded-xl border border-border">
-              {/* Table Header */}
-              <div className="grid grid-cols-3 border-b border-border bg-secondary/50 px-6 py-4">
-                <span className="text-sm font-semibold text-foreground">Característica</span>
-                <span className="text-center text-sm font-semibold text-foreground">Free</span>
-                <span className="text-center text-sm font-semibold text-primary">Pro</span>
-              </div>
-              {/* Table Rows */}
-              {features.map((f, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-3 items-center border-b border-border/50 px-6 py-3.5 last:border-0 hover:bg-secondary/20"
-                >
-                  <span className="text-sm text-foreground">{f.name}</span>
-                  <div className="flex justify-center">
-                    <FeatureValue value={f.free} />
-                  </div>
-                  <div className="flex justify-center">
-                    <FeatureValue value={f.pro} />
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* FAQ note */}
