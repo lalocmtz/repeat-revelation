@@ -5,21 +5,23 @@ import FiltersBar from "@/components/dashboard/FiltersBar";
 import MarketTabs from "@/components/dashboard/MarketTabs";
 import PatternTable from "@/components/dashboard/PatternTable";
 import BetSlip from "@/components/dashboard/BetSlip";
-import { mockPatterns, type Pattern } from "@/data/mockPatterns";
+import type { Pattern } from "@/data/mockPatterns";
 import { useAuth } from "@/contexts/AuthContext";
-import { Zap, Lock } from "lucide-react";
+import { useFootballData } from "@/hooks/useFootballData";
+import { Zap, Lock, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Dashboard = () => {
-  const { user, isPremium, loading } = useAuth();
+  const { user, isPremium, loading: authLoading } = useAuth();
+  const { patterns: apiPatterns, loading: dataLoading, error, refetch } = useFootballData();
   const [activeTime, setActiveTime] = useState("Hoy");
   const [activeTab, setActiveTab] = useState("Popular");
   const [slipSelections, setSlipSelections] = useState<Pattern[]>([]);
 
   const filteredPatterns = useMemo(() => {
-    if (activeTab === "Popular") return mockPatterns.filter((p) => p.market.includes("Popular"));
-    return mockPatterns.filter((p) => p.market.includes(activeTab));
-  }, [activeTab]);
+    if (activeTab === "Popular") return apiPatterns.filter((p) => p.market.includes("Popular"));
+    return apiPatterns.filter((p) => p.market.includes(activeTab));
+  }, [activeTab, apiPatterns]);
 
   const handleAddToSlip = (pattern: Pattern) => {
     if (!isPremium) return;
@@ -37,7 +39,7 @@ const Dashboard = () => {
 
   const slipIds = slipSelections.map((s) => s.id);
   const visiblePatterns = isPremium ? filteredPatterns : filteredPatterns.slice(0, 3);
-  const showOverlay = !loading && (!user || !isPremium);
+  const showOverlay = !authLoading && (!user || !isPremium);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -47,11 +49,40 @@ const Dashboard = () => {
       <div className="relative flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
           <MarketTabs activeTab={activeTab} onTabChange={setActiveTab} />
-          <PatternTable
-            patterns={visiblePatterns}
-            onAddToSlip={handleAddToSlip}
-            slipIds={slipIds}
-          />
+
+          {/* Loading state */}
+          {dataLoading && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Cargando partidos en vivo...</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!dataLoading && error && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">{error}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Intenta de nuevo en unos momentos</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refetch} className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Reintentar
+              </Button>
+            </div>
+          )}
+
+          {/* Data loaded */}
+          {!dataLoading && !error && (
+            <PatternTable
+              patterns={visiblePatterns}
+              onAddToSlip={handleAddToSlip}
+              slipIds={slipIds}
+            />
+          )}
         </div>
 
         {/* Desktop BetSlip sidebar */}
@@ -62,7 +93,7 @@ const Dashboard = () => {
         )}
 
         {/* Premium overlay */}
-        {showOverlay && (
+        {showOverlay && !dataLoading && (
           <div className="absolute inset-0 top-[50%] z-30 flex items-end justify-center">
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent" />
             <div className="relative z-10 mb-12 md:mb-16 flex flex-col items-center gap-3 text-center px-6">

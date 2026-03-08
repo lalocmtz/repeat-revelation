@@ -2,3 +2,6 @@ project_id = "ykamcxbsjkcgfuassbas"
 
 [functions.hotmart-webhook]
 verify_jwt = false
+
+[functions.football-data]
+verify_jwt = false
