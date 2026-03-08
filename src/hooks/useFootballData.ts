@@ -221,17 +221,6 @@ export function useFootballData() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "football-data",
-        {
-          body: null,
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      // supabase.functions.invoke doesn't support GET query params easily,
-      // so let's use fetch directly
       const projectUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
