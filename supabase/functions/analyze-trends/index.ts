@@ -243,9 +243,9 @@ serve(async (req) => {
 
     console.log("=== Starting trend analysis ===");
 
-    // Step 1: Fetch matches for the last 30 days + upcoming 3 days
+    // Step 1: Fetch matches for the last 14 days + upcoming 3 days
     const dates: string[] = [];
-    for (let i = 30; i >= -3; i--) {
+    for (let i = 14; i >= -3; i--) {
       dates.push(formatDate(new Date(Date.now() - i * 86400000)));
     }
 
