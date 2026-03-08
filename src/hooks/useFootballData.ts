@@ -86,7 +86,7 @@ function extractOddsFromBet365(oddsData: any): number {
 function derivePattern(match: ApiMatch, index: number): Pattern {
   const homeName = match.home?.longName || match.home?.name || "Home";
   const awayName = match.away?.longName || match.away?.name || "Away";
-  const leagueName = LEAGUE_NAMES[match.leagueId] || `League ${match.leagueId}`;
+  const leagueName = match.leagueName || LEAGUE_NAMES[match.leagueId] || `League ${match.leagueId}`;
   const matchTime = getMatchTime(match);
   const oddsValue = extractOddsFromBet365(match.oddsData);
 
