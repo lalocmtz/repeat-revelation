@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOdds } from "@/contexts/OddsContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, ArrowLeft, Zap, Crown, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-
-type OddsFormat = "decimal" | "american";
 
 const Profile = () => {
   const { user, isPremium, signOut } = useAuth();
