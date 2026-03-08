@@ -250,15 +250,35 @@ serve(async (req) => {
     }
 
     // Fetch leagues for name mapping
+    // Fallback league names for common leagues
+    const FALLBACK_LEAGUES: Record<number, string> = {
+      42: "Champions League", 73: "Europa League", 47: "Premier League",
+      87: "La Liga", 55: "Serie A", 54: "Bundesliga", 53: "Ligue 1",
+      239: "Liga MX", 41: "MLS", 130: "Eredivisie", 61: "Liga Portugal",
+      264: "Jupiler Pro League", 253: "Czech Liga", 308: "Saudi Pro League",
+      908818: "Championship", 915412: "Icelandic League",
+    };
+
     const leaguesData = await rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY)
       .then((data) => {
-        const map: Record<number, string> = {};
+        const map: Record<number, string> = { ...FALLBACK_LEAGUES };
         for (const l of data?.response?.leagues || []) {
-          map[l.id] = l.name || l.localizedName || `League ${l.id}`;
+          map[l.id] = l.name || l.localizedName || map[l.id] || `League ${l.id}`;
         }
         return map;
       })
-      .catch(() => ({} as Record<number, string>));
+      .catch(() => ({ ...FALLBACK_LEAGUES } as Record<number, string>));
+
+    // Update league names in matches_history for entries missing them
+    if (Object.keys(leaguesData).length > Object.keys(FALLBACK_LEAGUES).length) {
+      for (const [lid, lname] of Object.entries(leaguesData)) {
+        await supabase
+          .from("matches_history")
+          .update({ league_name: lname })
+          .eq("league_id", Number(lid))
+          .is("league_name", null);
+      }
+    }
 
     console.log(`Fetching matches for ${dates.length} dates...`);
 
