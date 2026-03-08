@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { BarChart3 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Navbar = () => {
   return (
@@ -24,8 +25,8 @@ const Navbar = () => {
           </a>
         </div>
 
-        <Button variant="hero" size="sm" className="rounded-full px-6">
-          Probar gratis
+        <Button variant="hero" size="sm" className="rounded-full px-6" asChild>
+          <Link to="/dashboard">Probar gratis</Link>
         </Button>
       </div>
     </nav>
