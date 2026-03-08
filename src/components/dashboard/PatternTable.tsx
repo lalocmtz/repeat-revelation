@@ -17,6 +17,8 @@ const typeColorMap: Record<string, string> = {
 };
 
 const PatternTable = ({ patterns, onAddToSlip, slipIds }: PatternTableProps) => {
+  const { formatOdds } = useOdds();
+
   return (
     <div className="flex-1 overflow-auto">
       {/* Desktop Header - hidden on mobile */}
