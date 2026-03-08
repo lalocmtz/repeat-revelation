@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
 interface RawEvent {
