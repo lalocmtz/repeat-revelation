@@ -10,21 +10,42 @@ const RAPIDAPI_HOST = "free-api-live-football-data.p.rapidapi.com";
 const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
 async function rapidApiFetch(path: string, apiKey: string) {
-  const url = `${BASE_URL}${path}`;
-  console.log(`Fetching: ${url}`);
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     headers: {
       "x-rapidapi-host": RAPIDAPI_HOST,
       "x-rapidapi-key": apiKey,
     },
   });
-  const text = await res.text();
-  console.log(`Response [${res.status}] for ${path}: ${text.substring(0, 300)}`);
   if (!res.ok) {
-    throw new Error(`RapidAPI ${res.status}: ${text.substring(0, 200)}`);
+    const text = await res.text();
+    console.error(`RapidAPI error [${res.status}] ${path}:`, text);
+    throw new Error(`RapidAPI ${res.status}`);
   }
-  return JSON.parse(text);
+  return res.json();
 }
+
+// Format date as YYYYMMDD
+function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
+}
+
+// Top league IDs (from fotmob)
+const TOP_LEAGUE_IDS = new Set([
+  42,  // Champions League
+  73,  // Europa League
+  47,  // Premier League
+  87,  // La Liga
+  55,  // Serie A
+  54,  // Bundesliga (was 35, fotmob uses 54)
+  53,  // Ligue 1
+  239, // Liga MX
+  41,  // MLS
+  130, // Eredivisie
+  61,  // Liga Portugal
+]);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -36,45 +57,107 @@ serve(async (req) => {
     if (!RAPIDAPI_KEY) throw new Error("RAPIDAPI_KEY not configured");
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "discover";
+    const action = url.searchParams.get("action") || "dashboard";
 
-    if (action === "discover") {
-      // First get today's matches
-      const matchesData = await rapidApiFetch("/football-get-matches-by-date?date=20260308", RAPIDAPI_KEY);
-      const matches = matchesData?.response?.matches || [];
-      
-      // Get a real match ID
-      const firstMatch = matches[0];
-      const matchId = firstMatch?.id;
-      
-      const results: Record<string, any> = {
-        matchCount: matches.length,
-        firstMatch: firstMatch ? JSON.stringify(firstMatch).substring(0, 500) : "none",
-        matchId,
-      };
-
-      if (matchId) {
-        // Test detail and odds with real match ID
-        const detailEndpoints = [
-          `/football-get-match-detail?matchid=${matchId}`,
-          `/football-event-odds?eventid=${matchId}`,
-          `/football-get-match-event?matchid=${matchId}`,
-          `/football-match-event?matchid=${matchId}`,
-        ];
-
-        for (const ep of detailEndpoints) {
-          try {
-            const data = await rapidApiFetch(ep, RAPIDAPI_KEY);
-            results[ep] = { status: "ok", preview: JSON.stringify(data).substring(0, 500) };
-          } catch (e) {
-            results[ep] = { status: "error", message: e instanceof Error ? e.message : String(e) };
-          }
-        }
-      }
-
-      return new Response(JSON.stringify({ results }), {
+    // Get matches for a specific date (YYYYMMDD)
+    if (action === "matches") {
+      const date = url.searchParams.get("date") || formatDate(new Date());
+      const data = await rapidApiFetch(
+        `/football-get-matches-by-date?date=${date}`,
+        RAPIDAPI_KEY
+      );
+      return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Get odds for a specific event
+    if (action === "odds") {
+      const eventId = url.searchParams.get("eventId");
+      if (!eventId) throw new Error("eventId required");
+      const data = await rapidApiFetch(
+        `/football-event-odds?eventid=${eventId}`,
+        RAPIDAPI_KEY
+      );
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get all leagues
+    if (action === "leagues") {
+      const data = await rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY);
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Dashboard: get today's matches from top leagues + odds for a subset
+    if (action === "dashboard") {
+      const today = formatDate(new Date());
+      const tomorrow = formatDate(new Date(Date.now() + 86400000));
+      const dayAfter = formatDate(new Date(Date.now() + 2 * 86400000));
+
+      const dateParam = url.searchParams.get("period") || "today";
+
+      let dates: string[];
+      if (dateParam === "tomorrow") {
+        dates = [tomorrow];
+      } else if (dateParam === "3days") {
+        dates = [today, tomorrow, dayAfter];
+      } else {
+        dates = [today];
+      }
+
+      // Fetch matches for all requested dates in parallel
+      const matchPromises = dates.map((d) =>
+        rapidApiFetch(`/football-get-matches-by-date?date=${d}`, RAPIDAPI_KEY)
+          .then((data) => data?.response?.matches || [])
+          .catch((e) => {
+            console.error(`Failed to fetch matches for ${d}:`, e);
+            return [];
+          })
+      );
+      const matchArrays = await Promise.all(matchPromises);
+      let allMatches = matchArrays.flat();
+
+      // Filter to top leagues only, and exclude finished matches
+      const topLeagueMatches = allMatches.filter((m: any) => {
+        const inTopLeague = TOP_LEAGUE_IDS.has(m.leagueId);
+        const isFinished = m.status?.finished === true;
+        return inTopLeague && !isFinished;
+      });
+
+      // If no top-league upcoming matches, show all upcoming matches
+      const matchesToUse = topLeagueMatches.length > 0 
+        ? topLeagueMatches.slice(0, 30) 
+        : allMatches.filter((m: any) => !m.status?.finished).slice(0, 30);
+
+      // Fetch odds for up to 10 matches in parallel (to avoid rate limits)
+      const matchesForOdds = matchesToUse.slice(0, 10);
+      const oddsPromises = matchesForOdds.map((m: any) =>
+        rapidApiFetch(`/football-event-odds?eventid=${m.id}`, RAPIDAPI_KEY)
+          .then((data) => ({ matchId: m.id, odds: data?.response?.odds || null }))
+          .catch(() => ({ matchId: m.id, odds: null }))
+      );
+      const oddsResults = await Promise.all(oddsPromises);
+      const oddsMap = new Map(oddsResults.map((o) => [o.matchId, o.odds]));
+
+      // Combine matches with odds
+      const enrichedMatches = matchesToUse.map((m: any) => ({
+        ...m,
+        oddsData: oddsMap.get(m.id) || null,
+      }));
+
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          matches: enrichedMatches,
+          totalMatches: allMatches.length,
+          topLeagueMatches: topLeagueMatches.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {
