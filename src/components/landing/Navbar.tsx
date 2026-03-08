@@ -20,9 +20,9 @@ const Navbar = () => {
           <a href="#benefits" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
             Beneficios
           </a>
-          <a href="#pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <Link to="/pricing" className="text-sm text-muted-foreground transition-colors hover:text-foreground">
             Precios
-          </a>
+          </Link>
         </div>
 
         <Button variant="hero" size="sm" className="rounded-full px-6" asChild>
