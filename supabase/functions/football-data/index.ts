@@ -10,29 +10,21 @@ const RAPIDAPI_HOST = "free-api-live-football-data.p.rapidapi.com";
 const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
 async function rapidApiFetch(path: string, apiKey: string) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const url = `${BASE_URL}${path}`;
+  console.log(`Fetching: ${url}`);
+  const res = await fetch(url, {
     headers: {
       "x-rapidapi-host": RAPIDAPI_HOST,
       "x-rapidapi-key": apiKey,
     },
   });
+  const text = await res.text();
+  console.log(`Response [${res.status}] for ${path}: ${text.substring(0, 500)}`);
   if (!res.ok) {
-    const text = await res.text();
-    console.error(`RapidAPI error [${res.status}] ${path}:`, text);
-    throw new Error(`RapidAPI ${res.status}`);
+    throw new Error(`RapidAPI ${res.status}: ${text.substring(0, 200)}`);
   }
-  return res.json();
+  return JSON.parse(text);
 }
-
-// Top league IDs for the API
-const LEAGUE_IDS: Record<string, number> = {
-  "Premier League": 47,
-  "La Liga": 87,
-  "Serie A": 55,
-  "Bundesliga": 35,
-  "Ligue 1": 53,
-  "Liga MX": 239,
-};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,114 +36,44 @@ serve(async (req) => {
     if (!RAPIDAPI_KEY) throw new Error("RAPIDAPI_KEY not configured");
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || "matches";
+    const action = url.searchParams.get("action") || "discover";
 
-    if (action === "matches") {
-      // Get live scores (today's matches)
-      const data = await rapidApiFetch("/football-get-all-livescores", RAPIDAPI_KEY);
-      
-      const matches = data?.response?.matches || data?.response?.live || data?.response || [];
-      
-      return new Response(JSON.stringify({ matches }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Discovery: try multiple endpoint patterns to find what works
+    if (action === "discover") {
+      const endpoints = [
+        "/football-get-all-leagues",
+        "/football-get-all-livescores",
+        "/football-current-live",
+        "/football-livescores",
+        "/football-live-scores",
+        "/football-fixtures",
+        "/football-get-fixtures",
+        "/football-matches",
+        "/football-get-matches",
+        "/football-today",
+        "/football-players-search?search=messi",
+        "/football-get-all-fixtures",
+        "/football-get-events",
+        "/football-league-list",
+        "/football-get-all-events",
+      ];
 
-    if (action === "odds") {
-      const eventId = url.searchParams.get("eventId");
-      if (!eventId) throw new Error("eventId required");
+      const results: Record<string, any> = {};
 
-      const data = await rapidApiFetch(
-        `/football-get-odds-by-event?eventid=${eventId}`,
-        RAPIDAPI_KEY
-      );
-      return new Response(JSON.stringify({ odds: data?.response || data }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (action === "statistics") {
-      const eventId = url.searchParams.get("eventId");
-      if (!eventId) throw new Error("eventId required");
-
-      const data = await rapidApiFetch(
-        `/football-get-statistics-event?eventid=${eventId}`,
-        RAPIDAPI_KEY
-      );
-      return new Response(JSON.stringify({ statistics: data?.response || data }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (action === "leagues") {
-      const data = await rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY);
-      return new Response(JSON.stringify({ leagues: data?.response || data }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Default: get upcoming matches for top leagues with odds
-    if (action === "dashboard") {
-      // Fetch livescores to get today's events
-      const liveData = await rapidApiFetch("/football-get-all-livescores", RAPIDAPI_KEY);
-      
-      // The API returns data in various formats, try to normalize
-      let allEvents: any[] = [];
-      
-      if (liveData?.response?.liveMatches) {
-        allEvents = liveData.response.liveMatches;
-      } else if (liveData?.response?.stages) {
-        for (const stage of liveData.response.stages) {
-          if (stage?.events) {
-            allEvents.push(...stage.events);
-          }
+      for (const ep of endpoints) {
+        try {
+          const data = await rapidApiFetch(ep, RAPIDAPI_KEY);
+          results[ep] = { status: "ok", keys: Object.keys(data || {}), preview: JSON.stringify(data).substring(0, 300) };
+          // Stop after finding 3 working endpoints to save quota
+          if (Object.values(results).filter((r: any) => r.status === "ok").length >= 3) break;
+        } catch (e) {
+          results[ep] = { status: "error", message: e instanceof Error ? e.message : String(e) };
         }
-      } else if (Array.isArray(liveData?.response)) {
-        allEvents = liveData.response;
-      } else if (liveData?.response?.events) {
-        allEvents = liveData.response.events;
       }
 
-      // Try to get odds for each event (limit to first 15 to avoid rate limits)
-      const eventsWithOdds: any[] = [];
-      const eventsToProcess = allEvents.slice(0, 15);
-
-      for (const event of eventsToProcess) {
-        const eventId = event?.id || event?.eventId || event?.matchId;
-        let odds = null;
-        let stats = null;
-
-        if (eventId) {
-          try {
-            const oddsData = await rapidApiFetch(
-              `/football-get-odds-by-event?eventid=${eventId}`,
-              RAPIDAPI_KEY
-            );
-            odds = oddsData?.response || oddsData;
-          } catch (e) {
-            console.error(`Failed to get odds for event ${eventId}:`, e);
-          }
-
-          try {
-            const statsData = await rapidApiFetch(
-              `/football-get-statistics-event?eventid=${eventId}`,
-              RAPIDAPI_KEY
-            );
-            stats = statsData?.response || statsData;
-          } catch (e) {
-            console.error(`Failed to get stats for event ${eventId}:`, e);
-          }
-        }
-
-        eventsWithOdds.push({ ...event, odds, statistics: stats });
-      }
-
-      return new Response(
-        JSON.stringify({ events: eventsWithOdds, rawEvents: allEvents.length }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {
