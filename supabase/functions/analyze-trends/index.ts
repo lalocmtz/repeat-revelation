@@ -79,17 +79,17 @@ interface Opportunity {
 function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>): Opportunity[] {
   const opps: Opportunity[] = [];
   const matches = stats.matches.slice(0, 20); // Last 20 matches
-  if (matches.length < 5) return opps;
+  if (matches.length < 3) return opps;
 
   // Find next match for this team
   const nextMatch = upcomingMatches.get(stats.teamId);
   const nextMatchId = nextMatch?.id || null;
-  const nextMatchHome = nextMatch?.home?.name || null;
-  const nextMatchAway = nextMatch?.away?.name || null;
+  const nextMatchHome = nextMatch?.home?.name || nextMatch?.home?.longName || null;
+  const nextMatchAway = nextMatch?.away?.name || nextMatch?.away?.longName || null;
   const nextMatchTime = nextMatch?.status?.utcTime || null;
 
-  // Analyze across sample sizes: 5, 10, 15, 20
-  for (const sampleSize of [5, 10, 15, 20]) {
+  // Analyze across sample sizes: 3, 5, 10, 15, 20
+  for (const sampleSize of [3, 5, 10, 15, 20]) {
     const sample = matches.slice(0, sampleSize);
     if (sample.length < sampleSize) continue;
 
