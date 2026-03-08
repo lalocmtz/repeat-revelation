@@ -25,8 +25,8 @@ const Navbar = () => {
           </a>
         </div>
 
-        <Button variant="hero" size="sm" className="rounded-full px-6">
-          Probar gratis
+        <Button variant="hero" size="sm" className="rounded-full px-6" asChild>
+          <Link to="/dashboard">Probar gratis</Link>
         </Button>
       </div>
     </nav>
