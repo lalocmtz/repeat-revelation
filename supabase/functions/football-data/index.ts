@@ -40,20 +40,25 @@ serve(async (req) => {
 
     if (action === "discover") {
       const endpoints = [
-        "/football-league-matches?leagueid=47&season=2025%2F2026",
-        "/football-get-matches-by-date?date=2026-03-08",
-        "/football-get-all-matches",
-        "/football-get-league-matches?leagueid=47",
-        "/football-league-fixtures?leagueid=47",
-        "/football-get-league-fixture?leagueid=47",
-        "/football-get-team-matches?teamid=8456",
-        "/football-get-match-detail?matchid=12345",
-        "/football-get-match-odds?matchid=12345",
-        "/football-get-match-stats?matchid=12345",
-        "/football-match-detail?matchid=12345",
-        "/football-get-all-fixtures-by-date?date=2026-03-08",
-        "/football-get-scheduled-events",
-        "/football-get-upcoming-matches",
+        // Try different date formats for matches-by-date
+        "/football-get-matches-by-date?date=20260308",
+        "/football-get-matches-by-date?date=2026-3-8",
+        "/football-get-matches-by-date?date=03/08/2026",
+        // Try league-based endpoints  
+        "/football-get-all-league-matches?leagueid=47",
+        "/football-get-league-events?leagueid=47",
+        "/football-get-fixtures-list?leagueid=47",
+        // Odds endpoints
+        "/football-get-all-odds?eventid=12345",
+        "/football-event-odds?eventid=12345",
+        "/football-get-event-odds?eventid=12345",
+        // Stats
+        "/football-get-event-statistics?eventid=12345",
+        "/football-get-match-statistics?matchid=12345",
+        // Team-based
+        "/football-get-team-info?teamid=8456",
+        "/football-get-team-statistics?teamid=8456",
+        "/football-team-detail?teamid=8456",
       ];
 
       const results: Record<string, any> = {};
