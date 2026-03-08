@@ -373,10 +373,11 @@ serve(async (req) => {
       );
 
       for (const { eventId, data } of oddsResults) {
-        if (!data?.response?.odds) continue;
+        if (!data?.response?.odds || !Array.isArray(data.response.odds)) continue;
         const parsed: Record<string, number> = {};
 
         for (const oddGroup of data.response.odds) {
+          if (!oddGroup?.items || !Array.isArray(oddGroup.items)) continue;
           const isBet365 = oddGroup?.bookmakerId === 2;
           const items = oddGroup?.items || [];
 
