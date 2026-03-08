@@ -1,38 +1,29 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
-interface ApiMatch {
-  id: number;
-  leagueId: number;
-  leagueName?: string;
-  time: string;
-  home: { id: number; score: number; name: string; longName: string };
-  away: { id: number; score: number; name: string; longName: string };
-  status: {
-    utcTime: string;
-    finished: boolean;
-    started: boolean;
-    cancelled: boolean;
-  };
-  oddsData?: any;
-  [key: string]: any;
+interface OpportunityRow {
+  id: string;
+  team_id: number;
+  team_name: string;
+  league_id: number;
+  league_name: string;
+  pattern_type: string;
+  market: string;
+  description: string;
+  context: string;
+  hits: number;
+  sample: number;
+  strength: number;
+  next_match_id: number | null;
+  next_match_home: string | null;
+  next_match_away: string | null;
+  next_match_time: string | null;
+  odds: number;
+  is_hot: boolean;
+  computed_at: string;
+  expires_at: string;
 }
-
-const PATTERN_TYPES: Pattern["type"][] = ["GOLES", "BTTS", "CORNERS", "RESULT", "CARDS"];
-
-const LEAGUE_NAMES: Record<number, string> = {
-  42: "Champions League",
-  73: "Europa League",
-  47: "Premier League",
-  87: "La Liga",
-  55: "Serie A",
-  54: "Bundesliga",
-  53: "Ligue 1",
-  239: "Liga MX",
-  41: "MLS",
-  130: "Eredivisie",
-  61: "Liga Portugal",
-};
 
 function getTeamAbbr(name: string): string {
   if (!name) return "???";
@@ -49,104 +40,59 @@ function getTeamAbbr(name: string): string {
   return abbrs[name] || name.substring(0, 3).toUpperCase();
 }
 
-function getMatchTime(match: ApiMatch): string {
-  if (match.status?.utcTime) {
-    try {
-      const d = new Date(match.status.utcTime);
-      return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-    } catch {
-      return match.time || "TBD";
-    }
-  }
-  return match.time || "TBD";
-}
-
-function extractOddsFromBet365(oddsData: any): number {
-  if (!oddsData) return +(1.5 + Math.random() * 1.5).toFixed(2);
+function getMatchTime(utcTime: string | null): string {
+  if (!utcTime) return "TBD";
   try {
-    // bet365 format: oddsData has markets or direct odds
-    if (oddsData.priceList) {
-      for (const price of oddsData.priceList) {
-        if (price?.fractionalValue || price?.value) {
-          const val = parseFloat(price.americanValue || price.value || "0");
-          if (val > 0) return val;
-        }
-      }
-    }
-    // Try nested structures
-    if (typeof oddsData === "object") {
-      const str = JSON.stringify(oddsData);
-      const match = str.match(/"value":"?([\d.]+)"?/);
-      if (match) return parseFloat(match[1]) || 1.85;
-    }
-  } catch { /* fallback */ }
-  return +(1.5 + Math.random() * 1.5).toFixed(2);
+    const d = new Date(utcTime);
+    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+  } catch {
+    return "TBD";
+  }
 }
 
-function derivePattern(match: ApiMatch, index: number): Pattern {
-  const homeName = match.home?.longName || match.home?.name || "Home";
-  const awayName = match.away?.longName || match.away?.name || "Away";
-  const leagueName = match.leagueName || LEAGUE_NAMES[match.leagueId] || `League ${match.leagueId}`;
-  const matchTime = getMatchTime(match);
-  const oddsValue = extractOddsFromBet365(match.oddsData);
+function mapTypeColor(type: string): string {
+  switch (type) {
+    case "CORNERS": return "bg-warning";
+    case "CARDS": return "bg-yellow-500";
+    case "RESULT": return "bg-blue-500";
+    default: return "bg-primary";
+  }
+}
 
-  const typeIndex = index % PATTERN_TYPES.length;
-  const type = PATTERN_TYPES[typeIndex];
+function mapMarketTags(row: OpportunityRow): string[] {
+  const tags = ["Popular"];
+  if (row.market === "Over 2.5") tags.push("Over 2.5");
+  if (row.market === "Over 1.5") tags.push("Over 1.5");
+  if (row.market === "BTTS") tags.push("BTTS");
+  if (row.market === "Corners") tags.push("Corners");
+  if (row.market === "Cards") tags.push("Cards");
+  if (row.market === "Result") tags.push("Result");
+  if (row.market === "Scored") tags.push("Over 1.5");
+  return tags;
+}
 
-  const descriptions: Record<string, string[]> = {
-    GOLES: [
-      `Over 2.5 goles – tendencia fuerte últimas jornadas`,
-      `Over 1.5 goles – consistencia alta en liga`,
-      `Over 3.5 goles – encuentro de alto scoring`,
-    ],
-    BTTS: [
-      `BTTS – ambos equipos anotan con frecuencia`,
-      `BTTS – historial de goles en ambas porterías`,
-    ],
-    CORNERS: [
-      `Over 9.5 corners – equipos con juego por banda`,
-      `Under 10.5 corners – partidos con pocas oportunidades`,
-    ],
-    RESULT: [
-      `${homeName} favorito por cuota y estadísticas`,
-      `Draw probable basado en historial H2H`,
-    ],
-    CARDS: [
-      `+3.5 tarjetas – liga/árbitro con alta incidencia`,
-      `+2.5 tarjetas – partidos intensos recientes`,
-    ],
-  };
-
-  const descOptions = descriptions[type];
-  const description = descOptions[index % descOptions.length];
-
-  const hits = 7 + Math.floor(Math.random() * 6);
-  const sample = hits + Math.floor(Math.random() * 5);
-  const hot = hits / sample >= 0.85;
-
-  const marketTags = ["Popular"];
-  if (type === "GOLES") marketTags.push(oddsValue > 1.7 ? "Over 2.5" : "Over 1.5");
-  if (type === "BTTS") marketTags.push("BTTS");
-  if (type === "CORNERS") marketTags.push("Corners");
-  if (type === "CARDS") marketTags.push("Cards");
+function opportunityToPattern(row: OpportunityRow): Pattern {
+  const patternType = (["GOLES", "BTTS", "CORNERS", "RESULT", "CARDS"].includes(row.pattern_type)
+    ? row.pattern_type
+    : "GOLES") as Pattern["type"];
 
   return {
-    id: String(match.id),
-    league: leagueName,
-    team: homeName,
-    description,
-    type,
-    typeColor: type === "CORNERS" ? "bg-warning" : type === "CARDS" ? "bg-yellow-500" : type === "RESULT" ? "bg-blue-500" : "bg-primary",
+    id: row.id,
+    league: row.league_name,
+    team: row.team_name,
+    description: row.description,
+    type: patternType,
+    typeColor: mapTypeColor(patternType),
     nextMatch: {
-      home: getTeamAbbr(homeName),
-      away: getTeamAbbr(awayName),
+      home: getTeamAbbr(row.next_match_home || row.team_name),
+      away: getTeamAbbr(row.next_match_away || "OPP"),
     },
-    matchTime,
-    odds: oddsValue,
-    hits,
-    sample,
-    hot,
-    market: marketTags,
+    matchTime: getMatchTime(row.next_match_time),
+    odds: Number(row.odds) || 1.85,
+    hits: row.hits,
+    sample: row.sample,
+    hot: row.is_hot,
+    market: mapMarketTags(row),
   };
 }
 
@@ -160,32 +106,22 @@ export function useFootballData() {
     setError(null);
 
     try {
-      const projectUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      // Read pre-computed opportunities from the database
+      const { data, error: dbError } = await supabase
+        .from("opportunities")
+        .select("*")
+        .gt("expires_at", new Date().toISOString())
+        .order("strength", { ascending: false })
+        .limit(50);
 
-      const res = await fetch(
-        `${projectUrl}/functions/v1/football-data?action=dashboard`,
-        {
-          headers: {
-            Authorization: `Bearer ${anonKey}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      if (dbError) throw dbError;
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`API error ${res.status}: ${errText}`);
-      }
-
-      const result = await res.json();
-      const matches: ApiMatch[] = result?.matches || [];
-
-      if (matches.length === 0) {
-        setError("No hay partidos disponibles en este momento");
+      if (!data || data.length === 0) {
+        // No opportunities yet — trigger analysis or show message
+        setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 24h.");
         setPatterns([]);
       } else {
-        const transformed = matches.map((m, i) => derivePattern(m, i));
+        const transformed = (data as unknown as OpportunityRow[]).map(opportunityToPattern);
         setPatterns(transformed);
       }
     } catch (e) {
