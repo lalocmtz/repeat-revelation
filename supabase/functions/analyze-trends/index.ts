@@ -395,12 +395,23 @@ serve(async (req) => {
     }
 
     console.log(`Teams analyzed: ${teamStatsMap.size}`);
+    // Log sample team stats for debugging
+    let debugTeam: TeamStats | null = null;
+    for (const stats of teamStatsMap.values()) {
+      if (stats.matches.length >= 5) { debugTeam = stats; break; }
+    }
+    if (debugTeam) {
+      console.log(`Debug team: ${debugTeam.teamName} (${debugTeam.matches.length} matches)`);
+      const over25 = debugTeam.matches.slice(0, 5).filter(m => m.totalGoals > 2).length;
+      console.log(`  Over 2.5 in last 5: ${over25}/5`);
+    }
 
     // Step 4: Build upcoming matches map (team -> next match)
     const upcomingMatches = new Map<number, any>();
     const upcoming = allMatches.filter(
       (m) => !m.status?.finished && !m.status?.cancelled
     );
+    console.log(`Upcoming matches for next-match linking: ${upcoming.length}`);
     for (const m of upcoming) {
       if (!upcomingMatches.has(m.home?.id)) upcomingMatches.set(m.home?.id, m);
       if (!upcomingMatches.has(m.away?.id)) upcomingMatches.set(m.away?.id, m);
