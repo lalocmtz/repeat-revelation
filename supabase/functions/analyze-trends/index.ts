@@ -256,7 +256,7 @@ serve(async (req) => {
       87: "La Liga", 55: "Serie A", 54: "Bundesliga", 53: "Ligue 1",
       239: "Liga MX", 41: "MLS", 130: "Eredivisie", 61: "Liga Portugal",
       264: "Jupiler Pro League", 253: "Czech Liga", 308: "Saudi Pro League",
-      908818: "Championship", 915412: "Icelandic League",
+      908818: "Championship", 915412: "Icelandic League", 913550: "MLS",
     };
 
     const leaguesData = await rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY)
