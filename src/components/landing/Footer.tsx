@@ -8,7 +8,7 @@ const Footer = () => {
           <div className="flex h-6 w-6 items-center justify-center rounded bg-primary">
             <BarChart3 className="h-3 w-3 text-primary-foreground" />
           </div>
-          <span className="text-sm font-semibold text-foreground">Betmatch</span>
+          <span className="text-sm font-semibold text-foreground">Tiplives</span>
         </div>
 
         <div className="flex gap-6 text-xs text-muted-foreground">
@@ -19,7 +19,7 @@ const Footer = () => {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          © 2024 Betmatch. Todos los derechos reservados.
+          © 2024 Tiplives. Todos los derechos reservados.
         </p>
       </div>
     </footer>

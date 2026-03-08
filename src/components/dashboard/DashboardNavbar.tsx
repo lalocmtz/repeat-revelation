@@ -15,7 +15,7 @@ const DashboardNavbar = () => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <BarChart3 className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold text-foreground">Betmatch</span>
+            <span className="text-lg font-bold text-foreground">Tiplives</span>
             <span className="text-sm text-primary">Terminal</span>
           </Link>
 

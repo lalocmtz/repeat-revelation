@@ -43,7 +43,7 @@ const Pricing = () => {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <BarChart3 className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold text-foreground">Betmatch</span>
+            <span className="text-lg font-bold text-foreground">Tiplives</span>
           </Link>
           <Link to="/auth">
             <Button variant="outline" size="sm">Iniciar sesión</Button>
@@ -62,7 +62,7 @@ const Pricing = () => {
               Desbloquea el radar completo
             </h1>
             <p className="mx-auto max-w-lg text-muted-foreground">
-              Un solo plan. Acceso total a todos los patrones, filtros y herramientas de Betmatch.
+              Un solo plan. Acceso total a todos los patrones, filtros y herramientas de Tiplives.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ const Pricing = () => {
 
                 <a
                   onClick={() => false}
-                  href="https://pay.hotmart.com/U101118131Q?checkoutMode=2"
+                  href="https://pay.hotmart.com/U101118131Q?checkoutMode=2&is498=true"
                   className="hotmart-fb hotmart__button-checkout inline-block w-full"
                 >
                   <Button variant="hero" className="w-full gap-2">
@@ -113,8 +113,8 @@ const Pricing = () => {
           <div className="mx-auto mt-12 max-w-lg text-center">
             <p className="text-sm text-muted-foreground">
               ¿Tienes dudas? Escríbenos a{" "}
-              <a href="mailto:soporte@betmatch.com" className="text-primary hover:underline">
-                soporte@betmatch.com
+              <a href="mailto:soporte@tiplives.com" className="text-primary hover:underline">
+                soporte@tiplives.com
               </a>
             </p>
           </div>
