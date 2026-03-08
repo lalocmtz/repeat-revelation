@@ -76,7 +76,7 @@ interface Opportunity {
   odds: number;
 }
 
-function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>): Opportunity[] {
+function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>, matchOddsMap: Map<number, Record<string, number>>): Opportunity[] {
   const opps: Opportunity[] = [];
   const matches = stats.matches.slice(0, 20); // Last 20 matches
   if (matches.length < 3) return opps;
@@ -87,6 +87,9 @@ function analyzeTeamTrends(stats: TeamStats, upcomingMatches: Map<number, any>):
   const nextMatchHome = nextMatch?.home?.name || nextMatch?.home?.longName || null;
   const nextMatchAway = nextMatch?.away?.name || nextMatch?.away?.longName || null;
   const nextMatchTime = nextMatch?.status?.utcTime || null;
+
+  // Get real odds for this team's next match
+  const realOdds = nextMatchId ? matchOddsMap.get(nextMatchId) : undefined;
 
   // Analyze across sample sizes: 3, 5, 10, 15, 20
   for (const sampleSize of [3, 5, 10, 15, 20]) {
