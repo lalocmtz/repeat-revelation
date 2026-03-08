@@ -157,10 +157,11 @@ serve(async (req) => {
       const oddsResults = await Promise.all(oddsPromises);
       const oddsMap = new Map(oddsResults.map((o) => [o.matchId, o.odds]));
 
-      // Combine matches with odds
+      // Combine matches with odds and league names
       const enrichedMatches = matchesToUse.map((m: any) => ({
         ...m,
         oddsData: oddsMap.get(m.id) || null,
+        leagueName: leaguesData[m.leagueId] || `League ${m.leagueId}`,
       }));
 
       return new Response(
