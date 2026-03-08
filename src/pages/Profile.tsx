@@ -13,6 +13,7 @@ import { toast } from "sonner";
 const Profile = () => {
   const { user, isPremium, signOut } = useAuth();
   const { oddsFormat, setOddsFormat } = useOdds();
+  const navigate = useNavigate();
   const [subscription, setSubscription] = useState<{
     status: string;
     plan: string;
