@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const CTASection = () => {
   return (
@@ -13,14 +15,12 @@ const CTASection = () => {
             <p className="mx-auto mb-8 max-w-lg text-muted-foreground">
               Únete a la plataforma líder en detección de tendencias tácticas y patrones de fútbol.
             </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button variant="hero" size="lg" className="rounded-full px-8">
-                Probar gratis ahora
-              </Button>
-              <Button variant="heroOutline" size="lg" className="rounded-full px-8">
-                Contactar ventas
-              </Button>
-            </div>
+            <Button variant="hero" size="lg" className="rounded-full px-8" asChild>
+              <Link to="/pricing">
+                <Zap className="mr-1 h-4 w-4" />
+                Obtener acceso Pro
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

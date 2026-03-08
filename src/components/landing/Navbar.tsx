@@ -10,7 +10,7 @@ const Navbar = () => {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <BarChart3 className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold text-foreground">Betmatch</span>
+          <span className="text-lg font-bold text-foreground">Tiplives</span>
         </div>
 
         <div className="hidden items-center gap-8 md:flex">
@@ -26,7 +26,7 @@ const Navbar = () => {
         </div>
 
         <Button variant="hero" size="sm" className="rounded-full px-6" asChild>
-          <Link to="/dashboard">Probar gratis</Link>
+          <Link to="/pricing">Obtener acceso</Link>
         </Button>
       </div>
     </nav>

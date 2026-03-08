@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Play } from "lucide-react";
+import { Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-stadium.jpg";
 
 const HeroSection = () => {
@@ -18,15 +19,14 @@ const HeroSection = () => {
               </h1>
             </div>
             <p className="max-w-md text-lg text-muted-foreground">
-              Betmatch analiza partidos de fútbol y ordena las tendencias más repetidas de hoy y los próximos 3 días.
+              Tiplives analiza partidos de fútbol y ordena las tendencias más repetidas de hoy y los próximos 3 días.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Button variant="hero" size="lg" className="rounded-full px-8">
-                Probar gratis
-              </Button>
-              <Button variant="heroOutline" size="lg" className="rounded-full px-8">
-                <Play className="mr-1 h-4 w-4" />
-                Ver demo
+              <Button variant="hero" size="lg" className="rounded-full px-8" asChild>
+                <Link to="/pricing">
+                  <Zap className="mr-1 h-4 w-4" />
+                  Obtener acceso Pro
+                </Link>
               </Button>
             </div>
             <div className="flex items-center gap-3">
@@ -52,11 +52,6 @@ const HeroSection = () => {
                 className="w-full object-cover"
                 loading="eager"
               />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <button className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-110">
-                  <Play className="ml-1 h-6 w-6" />
-                </button>
-              </div>
             </div>
           </div>
         </div>
