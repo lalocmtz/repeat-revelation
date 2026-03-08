@@ -32,12 +32,9 @@ const DashboardNavbar = () => {
             </Button>
           )}
           {user ? (
-            <div className="flex items-center gap-1.5">
-              <Link to="/profile" className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary hover:ring-2 hover:ring-primary/50 transition-all">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-              </Link>
-            </div>
-              </div>
+            <Link to="/profile" className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary hover:ring-2 hover:ring-primary/50 transition-all">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+            </Link>
           ) : (
             <Button variant="hero" size="sm" className="rounded-full h-8 text-xs px-4" asChild>
               <Link to="/auth">Entrar</Link>
