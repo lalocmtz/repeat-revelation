@@ -25,9 +25,6 @@ const Profile = () => {
       navigate("/auth");
       return;
     }
-    // Load user preferences from localStorage
-    const saved = localStorage.getItem("tiplives_odds_format");
-    if (saved === "decimal" || saved === "american") setOddsFormat(saved);
 
     // Load subscription info
     supabase
