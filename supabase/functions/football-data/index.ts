@@ -38,24 +38,22 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get("action") || "discover";
 
-    // Discovery: try multiple endpoint patterns to find what works
     if (action === "discover") {
       const endpoints = [
-        "/football-get-all-leagues",
-        "/football-get-all-livescores",
-        "/football-current-live",
-        "/football-livescores",
-        "/football-live-scores",
-        "/football-fixtures",
-        "/football-get-fixtures",
-        "/football-matches",
-        "/football-get-matches",
-        "/football-today",
-        "/football-players-search?search=messi",
-        "/football-get-all-fixtures",
-        "/football-get-events",
+        "/football-get-fixtures-by-date?date=20260308",
+        "/football-get-fixtures-by-league?leagueid=47",
+        "/football-get-all-matches-by-date?date=20260308",
+        "/football-league-matches?leagueid=47",
+        "/football-get-matches-by-league?leagueid=47",
+        "/football-get-odds?eventid=12345",
+        "/football-get-odds-by-event?eventid=12345",
+        "/football-match-odds?eventid=12345",
+        "/football-get-statistics?eventid=12345",
+        "/football-get-statistics-event?eventid=12345",
+        "/football-match-statistics?eventid=12345",
+        "/football-get-events-by-date?date=20260308",
         "/football-league-list",
-        "/football-get-all-events",
+        "/football-get-all-events-by-league?leagueid=47",
       ];
 
       const results: Record<string, any> = {};
@@ -63,9 +61,7 @@ serve(async (req) => {
       for (const ep of endpoints) {
         try {
           const data = await rapidApiFetch(ep, RAPIDAPI_KEY);
-          results[ep] = { status: "ok", keys: Object.keys(data || {}), preview: JSON.stringify(data).substring(0, 300) };
-          // Stop after finding 3 working endpoints to save quota
-          if (Object.values(results).filter((r: any) => r.status === "ok").length >= 3) break;
+          results[ep] = { status: "ok", keys: Object.keys(data || {}), preview: JSON.stringify(data).substring(0, 500) };
         } catch (e) {
           results[ep] = { status: "error", message: e instanceof Error ? e.message : String(e) };
         }
