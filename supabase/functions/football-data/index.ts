@@ -109,16 +109,26 @@ serve(async (req) => {
         dates = [today];
       }
 
-      // Fetch matches for all requested dates in parallel
-      const matchPromises = dates.map((d) =>
-        rapidApiFetch(`/football-get-matches-by-date?date=${d}`, RAPIDAPI_KEY)
-          .then((data) => data?.response?.matches || [])
-          .catch((e) => {
-            console.error(`Failed to fetch matches for ${d}:`, e);
-            return [];
+      // Fetch matches and leagues in parallel
+      const [matchArrays, leaguesData] = await Promise.all([
+        Promise.all(dates.map((d) =>
+          rapidApiFetch(`/football-get-matches-by-date?date=${d}`, RAPIDAPI_KEY)
+            .then((data) => data?.response?.matches || [])
+            .catch((e) => {
+              console.error(`Failed to fetch matches for ${d}:`, e);
+              return [];
+            })
+        )),
+        rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY)
+          .then((data) => {
+            const map: Record<number, string> = {};
+            for (const l of data?.response?.leagues || []) {
+              map[l.id] = l.name || l.localizedName || `League ${l.id}`;
+            }
+            return map;
           })
-      );
-      const matchArrays = await Promise.all(matchPromises);
+          .catch(() => ({} as Record<number, string>)),
+      ]);
       let allMatches = matchArrays.flat();
 
       // Filter out cancelled matches
