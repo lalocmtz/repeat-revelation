@@ -368,7 +368,7 @@ serve(async (req) => {
           teamId: match.home_team_id,
           teamName: match.home_team_name,
           leagueId: match.league_id,
-          leagueName: match.league_name || `League ${match.league_id}`,
+          leagueName: match.league_name || leaguesData[match.league_id] || `League ${match.league_id}`,
           matches: [],
         });
       }
