@@ -4,6 +4,7 @@ import type { Pattern } from "@/data/mockPatterns";
 interface ApiMatch {
   id: number;
   leagueId: number;
+  leagueName?: string;
   time: string;
   home: { id: number; score: number; name: string; longName: string };
   away: { id: number; score: number; name: string; longName: string };
