@@ -48,9 +48,9 @@ function mapTypeColor(type: string): string {
 // Map DB market string → market tags for tab filtering
 function mapMarketTags(market: string): string[] {
   const tags: string[] = ["Popular"];
-  const m = market.toLowerCase();
+  const m = market.toLowerCase().trim();
   if (m.includes("over 2.5")) tags.push("Over 2.5");
-  if (m.includes("over 1.5") || m.includes("scored") || m === "scored") tags.push("Over 1.5");
+  if (m.includes("over 1.5") || m.includes("scored")) tags.push("Over 1.5");
   if (m.includes("btts")) tags.push("BTTS");
   if (m.includes("corner")) tags.push("Corners");
   if (m.includes("card") || m.includes("booking")) tags.push("Cards");
@@ -108,23 +108,25 @@ export type PatternWithDate = Pattern & { matchDateStr: string | null };
 
 export function useFootballData() {
   const [patterns, setPatterns] = useState<PatternWithDate[]>([]);
-  const [loading, setLoading] = useState(false); // Start false; set true only when fetching
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    // Safety net: force loading=false after 10s no matter what
+    // Guarantee loading ends within 12s regardless of network state
+    let done = false;
     const safetyTimer = setTimeout(() => {
-      console.warn("[useFootballData] Safety timeout triggered");
-      setLoading(false);
-      setError("La consulta tardó demasiado. Intenta de nuevo.");
-    }, 10000);
+      if (!done) {
+        console.warn("[useFootballData] 12s safety timeout — forcing done");
+        setLoading(false);
+        setError("La consulta tardó demasiado. Intenta de nuevo.");
+      }
+    }, 12000);
 
     try {
-      console.log("[useFootballData] Fetching opportunities...");
+      console.log("[useFootballData] Starting query to opportunities table...");
 
       const { data, error: dbError } = await supabase
         .from("opportunities")
@@ -132,20 +134,27 @@ export function useFootballData() {
         .order("strength", { ascending: false })
         .limit(300);
 
+      done = true;
       clearTimeout(safetyTimer);
-      console.log("[useFootballData] Got", data?.length ?? 0, "rows, error:", dbError?.message ?? null);
 
-      if (dbError) throw dbError;
+      console.log("[useFootballData] Query complete — rows:", data?.length ?? 0, "| error:", dbError?.message ?? "none");
+
+      if (dbError) {
+        console.error("[useFootballData] DB error detail:", JSON.stringify(dbError));
+        throw dbError;
+      }
 
       if (!data || data.length === 0) {
+        console.warn("[useFootballData] Empty result set");
         setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
         setPatterns([]);
       } else {
         setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
       }
     } catch (e) {
+      done = true;
       clearTimeout(safetyTimer);
-      console.error("[useFootballData] Error:", e);
+      console.error("[useFootballData] Caught exception:", e);
       setError(e instanceof Error ? e.message : "Error al cargar datos");
       setPatterns([]);
     } finally {
