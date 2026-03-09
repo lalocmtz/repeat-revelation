@@ -172,61 +172,47 @@ function parseOddsFromResponse(data: any): Record<string, number> {
 
 ---
 
-### 2.3 Trend Detection Engine [~]
+### 2.3 Trend Detection Engine ✅
 
 - [x] Analyzes Over 2.5, Over 1.5, BTTS, Home Win, Team Scored patterns
 - [x] Supports sample sizes: 3, 5, 10, 15, 20 matches
 - [x] Deduplicates per team + market + context (keeps strongest)
 - [x] Attaches upcoming match data (`next_match_home`, `away`, `time`)
 - [x] Only generates opportunities for teams with **an upcoming match**
-- [ ] **Add corner trend analysis** (v1 scope)
-- [ ] **Add discipline/cards trend** (v1 scope)
-- [ ] **Add away win streak** pattern
-- [ ] **Add unbeaten streak** pattern (won or drawn)
-
-**Corner / Cards analysis snippet** (add to `analyzeTeamTrends`):
-```typescript
-// Corners — requires corners data (currently not in matches_history)
-// TODO: add total_corners column to matches_history when API provides it
-
-// Unbeaten streak
-const unbeatenCount = sample.filter((m) => !m.lost).length;
-if (unbeatenCount >= Math.ceil(sampleSize * 0.75)) {
-  opps.push({
-    ...baseFields,
-    pattern_type: "RESULT", market: "Result",
-    description: `${stats.teamName} sin perder en ${unbeatenCount} de ${sampleSize} partidos`,
-    context: "general", hits: unbeatenCount, sample: sampleSize,
-    is_hot: unbeatenCount / sampleSize >= 0.85,
-    odds: realOdds?.homeWin || 1.50,
-  });
-}
-
-// Away win streak
-const awayMatches = sample.filter((m) => !m.isHome);
-if (awayMatches.length >= 3) {
-  const awayWins = awayMatches.filter((m) => m.won).length;
-  if (awayWins >= Math.ceil(awayMatches.length * 0.70)) {
-    opps.push({
-      ...baseFields,
-      pattern_type: "RESULT", market: "Result",
-      description: `Victoria visitante en ${awayWins} de ${awayMatches.length} partidos fuera`,
-      context: "away", hits: awayWins, sample: awayMatches.length,
-      is_hot: awayWins / awayMatches.length >= 0.80,
-      odds: realOdds?.awayWin || 2.10,
-    });
-  }
-}
-```
+- [ ] **Add corner trend analysis** (v1 scope — requires corners data in matches_history)
+- [ ] **Add discipline/cards trend** (v1 scope — requires cards data in matches_history)
+- [x] **Add away win streak** pattern
+- [x] **Add unbeaten streak** pattern (won or drawn)
+- [x] **Add clean sheet streak** pattern
 
 ---
 
 ### 2.4 Strength Scoring & Ranking ✅
 
-- [x] `strength` = `hits / sample` (percentage), sorted descending
+- [x] `strength` = GENERATED ALWAYS column: `hits / sample * 100` (computed in DB)
 - [x] Larger sample size breaks ties (20 > 15 > 10 > 5 > 3)
 - [x] `is_hot = true` when strength ≥ 85%
-- [ ] Add `strength` column computation directly in DB via trigger (deferred to v2)
+- [x] `strength` is a GENERATED ALWAYS column — not included in inserts
+
+---
+
+### 2.5 Scheduled Runs ✅
+
+- [x] Configure cron job to run `analyze-trends` every **6 hours**
+  - Cron job `analyze-trends-every-6h` created via `pg_cron` + `pg_net`
+  - Schedule: `0 */6 * * *` (every 6 hours at minute 0)
+  - Also: `analyze-trends-daily` at `0 6 * * *`
+  - Calls edge function via `net.http_post()`
+- [x] `total_goals` and `btts` are GENERATED ALWAYS columns in `matches_history`
+- [x] `strength` is a GENERATED ALWAYS column in `opportunities`
+
+### 2.6 Pipeline Bug Fixes ✅
+
+- [x] Fixed: `strength`, `total_goals`, `btts` are GENERATED ALWAYS columns — removed from INSERT
+- [x] Fixed: `useFootballData` now has explicit states: loading, success, empty, error
+- [x] Fixed: Added retry logic (2 retries with 2s delay) for timeout/network errors
+- [x] Fixed: Increased timeout from 8s to 15s for cold-start resilience
+- [x] Fixed: Dashboard properly distinguishes loading/error/empty/data states
 
 ---
 
