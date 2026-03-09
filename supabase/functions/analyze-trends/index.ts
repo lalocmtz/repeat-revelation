@@ -369,6 +369,7 @@ serve(async (req) => {
       (m) => m.status?.finished && !m.status?.cancelled && m.home?.score !== undefined
     );
 
+    // Note: total_goals and btts are GENERATED ALWAYS columns — do NOT include them
     const historyRows = finishedMatches.map((m: any) => ({
       id: m.id,
       league_id: m.leagueId,
@@ -382,8 +383,6 @@ serve(async (req) => {
       match_date: formatDateISO(new Date(m.status.utcTime || m.timeTS)),
       match_time: m.time,
       status: "finished",
-      total_goals: (m.home.score ?? 0) + (m.away.score ?? 0),
-      btts: (m.home.score ?? 0) > 0 && (m.away.score ?? 0) > 0,
     }));
 
     if (historyRows.length > 0) {
