@@ -230,26 +230,12 @@ if (awayMatches.length >= 3) {
 
 ---
 
-### 2.5 Scheduled Runs [ ]
+### 2.5 Scheduled Runs ✅
 
-- [ ] Configure cron job to run `analyze-trends` every **6 hours**
-  - File: `supabase/config.toml` — add cron schedule
-  - **SQL for pg_cron** (run as migration):
-```sql
--- Enable pg_cron extension (if not enabled)
-select cron.schedule(
-  'analyze-trends-every-6h',
-  '0 */6 * * *',
-  $$
-    select net.http_post(
-      url := current_setting('app.edge_function_url') || '/analyze-trends',
-      headers := '{"Content-Type": "application/json"}'::jsonb,
-      body := '{}'::jsonb
-    );
-  $$
-);
-```
-  - Alternative: Call via Supabase `pg_net` or set up external cron (e.g. cron-job.org)
+- [x] Configure cron job to run `analyze-trends` every **6 hours**
+  - Cron job `analyze-trends-every-6h` created via `pg_cron` + `pg_net`
+  - Schedule: `0 */6 * * *` (every 6 hours at minute 0)
+  - Calls edge function via `net.http_post()`
 
 ---
 

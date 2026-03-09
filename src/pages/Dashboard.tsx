@@ -131,13 +131,14 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Data loaded */}
+          {/* Data loaded — even if empty, render the table (it handles empty state) */}
           {!dataLoading && !error && (
             <PatternTable
               patterns={visiblePatterns}
               onAddToSlip={handleAddToSlip}
               slipIds={slipIds}
               totalCount={filteredPatterns.length}
+              isEmpty={apiPatterns.length === 0}
             />
           )}
         </div>
