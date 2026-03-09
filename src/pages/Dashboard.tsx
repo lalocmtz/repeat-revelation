@@ -113,15 +113,16 @@ const Dashboard = () => {
           <MarketTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
           {/* Loading state */}
-          {dataLoading && (
+          {isInitialLoading && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Cargando patrones...</p>
+              <p className="text-xs text-muted-foreground/60">Esto puede tomar unos segundos</p>
             </div>
           )}
 
           {/* Error state */}
-          {!dataLoading && error && (
+          {!isInitialLoading && hasError && (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-6 w-6 text-destructive" />
@@ -137,14 +138,25 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Data loaded — even if empty, render the table (it handles empty state) */}
-          {!dataLoading && !error && (
+          {/* Empty state - pipeline has no data */}
+          {!isInitialLoading && isEmpty && (
+            <PatternTable
+              patterns={[]}
+              onAddToSlip={handleAddToSlip}
+              slipIds={slipIds}
+              totalCount={0}
+              isEmpty={true}
+            />
+          )}
+
+          {/* Success state with data (or filtered to empty) */}
+          {!isInitialLoading && hasData && (
             <PatternTable
               patterns={visiblePatterns}
               onAddToSlip={handleAddToSlip}
               slipIds={slipIds}
               totalCount={filteredPatterns.length}
-              isEmpty={apiPatterns.length === 0}
+              isEmpty={false}
             />
           )}
         </div>
