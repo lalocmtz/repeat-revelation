@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
@@ -110,60 +110,82 @@ export function useFootballData() {
   const [patterns, setPatterns] = useState<PatternWithDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   const fetchData = useCallback(async () => {
+    if (!mountedRef.current) return;
+
     setLoading(true);
     setError(null);
 
-    // Guarantee loading ends within 12s regardless of network state
-    let done = false;
+    // Abort controller to cancel in-flight request on unmount
+    const controller = new AbortController();
+
+    // 8-second safety timeout
     const safetyTimer = setTimeout(() => {
-      if (!done) {
-        console.warn("[useFootballData] 12s safety timeout — forcing done");
+      console.warn("[useFootballData] 8s safety timeout — aborting & showing empty state");
+      controller.abort();
+      if (mountedRef.current) {
         setLoading(false);
         setError("La consulta tardó demasiado. Intenta de nuevo.");
       }
-    }, 12000);
+    }, 8000);
 
     try {
-      console.log("[useFootballData] Starting query to opportunities table...");
+      console.log("[useFootballData] Querying opportunities...");
 
       const { data, error: dbError } = await supabase
         .from("opportunities")
         .select("*")
         .order("strength", { ascending: false })
-        .limit(300);
+        .limit(300)
+        .abortSignal(controller.signal);
 
-      done = true;
       clearTimeout(safetyTimer);
 
-      console.log("[useFootballData] Query complete — rows:", data?.length ?? 0, "| error:", dbError?.message ?? "none");
+      if (!mountedRef.current) return;
+
+      console.log(`[useFootballData] Done — rows: ${data?.length ?? 0} | error: ${dbError?.message ?? "none"}`);
 
       if (dbError) {
-        console.error("[useFootballData] DB error detail:", JSON.stringify(dbError));
-        throw dbError;
+        console.error("[useFootballData] DB error:", JSON.stringify(dbError));
+        setError(dbError.message || "Error al cargar datos");
+        setPatterns([]);
+      } else if (!data || data.length === 0) {
+        console.warn("[useFootballData] Empty result — showing empty state");
+        // Don't show an error — just empty patterns (table will show empty state)
+        setPatterns([]);
+        setError(null);
+      } else {
+        console.log(`[useFootballData] Mapping ${data.length} opportunities to patterns`);
+        setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
+        setError(null);
+      }
+    } catch (e: unknown) {
+      clearTimeout(safetyTimer);
+      if (!mountedRef.current) return;
+
+      // AbortError means we already set the timeout error above
+      if (e instanceof Error && e.name === "AbortError") {
+        return;
       }
 
-      if (!data || data.length === 0) {
-        console.warn("[useFootballData] Empty result set");
-        setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
-        setPatterns([]);
-      } else {
-        setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
-      }
-    } catch (e) {
-      done = true;
-      clearTimeout(safetyTimer);
-      console.error("[useFootballData] Caught exception:", e);
+      console.error("[useFootballData] Exception:", e);
       setError(e instanceof Error ? e.message : "Error al cargar datos");
       setPatterns([]);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [fetchData]);
 
   return { patterns, loading, error, refetch: fetchData };
