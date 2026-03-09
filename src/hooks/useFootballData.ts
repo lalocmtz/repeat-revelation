@@ -115,40 +115,33 @@ export function useFootballData() {
     setLoading(true);
     setError(null);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
     try {
-      // Use a wide window: any opportunity computed in the last 48h
-      const cutoff = new Date();
-      cutoff.setHours(cutoff.getHours() - 48);
+      console.log("[useFootballData] Starting fetch...");
 
       const { data, error: dbError } = await supabase
         .from("opportunities")
         .select("*")
-        .gt("computed_at", cutoff.toISOString())
         .order("strength", { ascending: false })
-        .limit(300)
-        .abortSignal(controller.signal);
+        .limit(300);
 
-      clearTimeout(timeout);
+      console.log("[useFootballData] Response:", { count: data?.length, error: dbError });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error("[useFootballData] DB error:", dbError);
+        throw dbError;
+      }
 
       if (!data || data.length === 0) {
+        console.warn("[useFootballData] No data returned from DB");
         setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
         setPatterns([]);
       } else {
+        console.log("[useFootballData] Loaded", data.length, "opportunities. Sample:", data[0]);
         setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
       }
     } catch (e) {
-      clearTimeout(timeout);
-      if (e instanceof DOMException && e.name === "AbortError") {
-        setError("La consulta tardó demasiado. Intenta de nuevo.");
-      } else {
-        console.error("useFootballData error:", e);
-        setError(e instanceof Error ? e.message : "Error al cargar datos");
-      }
+      console.error("[useFootballData] Catch error:", e);
+      setError(e instanceof Error ? e.message : "Error al cargar datos");
       setPatterns([]);
     } finally {
       setLoading(false);
