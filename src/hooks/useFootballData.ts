@@ -17,6 +17,15 @@ function getTeamAbbr(name: string): string {
   return abbrs[name] || name.substring(0, 3).toUpperCase();
 }
 
+function getMatchDateStr(utcTime: string | null): string | null {
+  if (!utcTime) return null;
+  try {
+    return new Date(utcTime).toISOString().split("T")[0];
+  } catch {
+    return null;
+  }
+}
+
 function getMatchTime(utcTime: string | null): string {
   if (!utcTime) return "TBD";
   try {
@@ -36,19 +45,40 @@ function mapTypeColor(type: string): string {
   }
 }
 
-function mapMarketTags(row: { market: string }): string[] {
-  const tags = ["Popular"];
-  if (row.market === "Over 2.5") tags.push("Over 2.5");
-  if (row.market === "Over 1.5") tags.push("Over 1.5");
-  if (row.market === "BTTS") tags.push("BTTS");
-  if (row.market === "Corners") tags.push("Corners");
-  if (row.market === "Cards") tags.push("Cards");
-  if (row.market === "Result") tags.push("Result");
-  if (row.market === "Scored") tags.push("Over 1.5");
+// Map DB market string → market tags for tab filtering
+function mapMarketTags(market: string): string[] {
+  const tags: string[] = ["Popular"];
+  const m = market.toLowerCase();
+  if (m.includes("over 2.5")) tags.push("Over 2.5");
+  if (m.includes("over 1.5") || m.includes("scored")) tags.push("Over 1.5");
+  if (m.includes("btts")) tags.push("BTTS");
+  if (m.includes("corner")) tags.push("Corners");
+  if (m.includes("card") || m.includes("booking")) tags.push("Cards");
   return tags;
 }
 
-function opportunityToPattern(row: any): Pattern {
+export interface RawOpportunity {
+  id: string;
+  team_name: string;
+  league_name: string;
+  description: string;
+  pattern_type: string;
+  market: string;
+  context: string | null;
+  hits: number;
+  sample: number;
+  is_hot: boolean | null;
+  next_match_home: string | null;
+  next_match_away: string | null;
+  next_match_time: string | null;
+  next_match_id: number | null;
+  odds: number | null;
+  strength: number | null;
+  league_id: number;
+  team_id: number;
+}
+
+function opportunityToPattern(row: RawOpportunity): Pattern & { matchDateStr: string | null } {
   const patternType = (["GOLES", "BTTS", "CORNERS", "RESULT", "CARDS"].includes(row.pattern_type)
     ? row.pattern_type
     : "GOLES") as Pattern["type"];
@@ -65,16 +95,19 @@ function opportunityToPattern(row: any): Pattern {
       away: getTeamAbbr(row.next_match_away || "OPP"),
     },
     matchTime: getMatchTime(row.next_match_time),
+    matchDateStr: getMatchDateStr(row.next_match_time),
     odds: Number(row.odds) || 1.85,
     hits: row.hits,
     sample: row.sample,
-    hot: row.is_hot,
-    market: mapMarketTags(row),
+    hot: !!row.is_hot,
+    market: mapMarketTags(row.market),
   };
 }
 
+export type PatternWithDate = Pattern & { matchDateStr: string | null };
+
 export function useFootballData() {
-  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [patterns, setPatterns] = useState<PatternWithDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +115,6 @@ export function useFootballData() {
     setLoading(true);
     setError(null);
 
-    // Timeout after 8 seconds
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
@@ -92,7 +124,7 @@ export function useFootballData() {
         .select("*")
         .gt("expires_at", new Date().toISOString())
         .order("strength", { ascending: false })
-        .limit(50)
+        .limit(200)
         .abortSignal(controller.signal);
 
       clearTimeout(timeout);
@@ -100,10 +132,10 @@ export function useFootballData() {
       if (dbError) throw dbError;
 
       if (!data || data.length === 0) {
-        setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 24h.");
+        setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
         setPatterns([]);
       } else {
-        setPatterns(data.map(opportunityToPattern));
+        setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
       }
     } catch (e) {
       clearTimeout(timeout);

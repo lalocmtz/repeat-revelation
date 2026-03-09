@@ -11,17 +11,63 @@ import { useFootballData } from "@/hooks/useFootballData";
 import { Zap, Lock, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Returns YYYY-MM-DD string for a date offset from today
+function getDateStr(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().split("T")[0];
+}
+
 const Dashboard = () => {
   const { user, isPremium, loading: authLoading } = useAuth();
   const { patterns: apiPatterns, loading: dataLoading, error, refetch } = useFootballData();
   const [activeTime, setActiveTime] = useState("Hoy");
   const [activeTab, setActiveTab] = useState("Popular");
+  const [activeLeague, setActiveLeague] = useState("Todas");
   const [slipSelections, setSlipSelections] = useState<Pattern[]>([]);
 
+  // Derive available leagues from loaded data
+  const availableLeagues = useMemo(() => {
+    const leagues = Array.from(new Set(apiPatterns.map((p) => p.league))).sort();
+    return ["Todas", ...leagues];
+  }, [apiPatterns]);
+
   const filteredPatterns = useMemo(() => {
-    if (activeTab === "Popular") return apiPatterns.filter((p) => p.market.includes("Popular"));
-    return apiPatterns.filter((p) => p.market.includes(activeTab));
-  }, [activeTab, apiPatterns]);
+    let result = apiPatterns;
+
+    // ── Time filter ───────────────────────────────────────────
+    if (activeTime === "Hoy") {
+      const today = getDateStr(0);
+      result = result.filter((p) => {
+        // If matchDateStr is null (TBD), include it so they're not hidden
+        return p.matchDateStr === null || p.matchDateStr === today;
+      });
+    } else if (activeTime === "Mañana") {
+      const tomorrow = getDateStr(1);
+      result = result.filter((p) => {
+        return p.matchDateStr === null || p.matchDateStr === tomorrow;
+      });
+    } else if (activeTime === "3 Días") {
+      const today = getDateStr(0);
+      const in3 = getDateStr(2);
+      result = result.filter((p) => {
+        if (p.matchDateStr === null) return true;
+        return p.matchDateStr >= today && p.matchDateStr <= in3;
+      });
+    }
+
+    // ── Market tab filter ─────────────────────────────────────
+    if (activeTab !== "Popular") {
+      result = result.filter((p) => p.market.includes(activeTab));
+    }
+
+    // ── League filter ─────────────────────────────────────────
+    if (activeLeague !== "Todas") {
+      result = result.filter((p) => p.league === activeLeague);
+    }
+
+    return result;
+  }, [apiPatterns, activeTime, activeTab, activeLeague]);
 
   const handleAddToSlip = (pattern: Pattern) => {
     if (!isPremium) return;
@@ -39,12 +85,19 @@ const Dashboard = () => {
 
   const slipIds = slipSelections.map((s) => s.id);
   const visiblePatterns = isPremium ? filteredPatterns : filteredPatterns.slice(0, 3);
+  const lockedCount = Math.max(0, filteredPatterns.length - 3);
   const showOverlay = !authLoading && (!user || !isPremium);
 
   return (
     <div className="flex h-screen flex-col bg-background">
       <DashboardNavbar />
-      <FiltersBar activeTime={activeTime} onTimeChange={setActiveTime} />
+      <FiltersBar
+        activeTime={activeTime}
+        onTimeChange={setActiveTime}
+        activeLeague={activeLeague}
+        onLeagueChange={setActiveLeague}
+        leagues={availableLeagues}
+      />
 
       <div className="relative flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -54,7 +107,7 @@ const Dashboard = () => {
           {dataLoading && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">Cargando partidos en vivo...</p>
+              <p className="text-sm text-muted-foreground">Cargando patrones...</p>
             </div>
           )}
 
@@ -81,6 +134,7 @@ const Dashboard = () => {
               patterns={visiblePatterns}
               onAddToSlip={handleAddToSlip}
               slipIds={slipIds}
+              totalCount={filteredPatterns.length}
             />
           )}
         </div>
@@ -104,7 +158,9 @@ const Dashboard = () => {
                 Desbloquea todos los patrones
               </h3>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Acceso a oportunidades ilimitadas, filtros avanzados, Bet Slip y más.
+                {lockedCount > 0
+                  ? `Desbloquea ${lockedCount} patrones premium detectados hoy.`
+                  : "Acceso a oportunidades ilimitadas, filtros avanzados, Bet Slip y más."}
               </p>
               <Button variant="hero" size="lg" className="rounded-full px-6 gap-2" asChild>
                 <Link to="/pricing">
