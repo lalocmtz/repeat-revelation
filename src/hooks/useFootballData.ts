@@ -108,8 +108,9 @@ export type PatternWithDate = Pattern & { matchDateStr: string | null };
 
 export function useFootballData() {
   const [patterns, setPatterns] = useState<PatternWithDate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false; set true only when fetching
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
