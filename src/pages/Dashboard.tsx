@@ -37,10 +37,12 @@ const Dashboard = () => {
 
     // ── Time filter ───────────────────────────────────────────
     if (activeTime === "Hoy") {
+      // Include yesterday + today so recently-computed data isn't lost
+      const yesterday = getDateStr(-1);
       const today = getDateStr(0);
       result = result.filter((p) => {
-        // If matchDateStr is null (TBD), include it so they're not hidden
-        return p.matchDateStr === null || p.matchDateStr === today;
+        if (p.matchDateStr === null) return true;
+        return p.matchDateStr >= yesterday && p.matchDateStr <= today;
       });
     } else if (activeTime === "Mañana") {
       const tomorrow = getDateStr(1);
@@ -48,11 +50,12 @@ const Dashboard = () => {
         return p.matchDateStr === null || p.matchDateStr === tomorrow;
       });
     } else if (activeTime === "3 Días") {
-      const today = getDateStr(0);
-      const in3 = getDateStr(2);
+      // From yesterday up to 3 days ahead to catch all computed data
+      const from = getDateStr(-1);
+      const to = getDateStr(3);
       result = result.filter((p) => {
         if (p.matchDateStr === null) return true;
-        return p.matchDateStr >= today && p.matchDateStr <= in3;
+        return p.matchDateStr >= from && p.matchDateStr <= to;
       });
     }
 
