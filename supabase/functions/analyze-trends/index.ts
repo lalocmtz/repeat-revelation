@@ -252,7 +252,6 @@ function analyzeTeamTrends(
           context: "away",
           hits: awayWins,
           sample: awayMatches.length,
-          strength: Math.round(awayWinRatio * 100),
           is_hot: awayWinRatio >= 0.75,
           odds: realOdds.awayWin || 2.10,
         });
