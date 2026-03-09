@@ -213,7 +213,6 @@ function analyzeTeamTrends(
         context: "general",
         hits: scoredCount,
         sample: sampleSize,
-        strength: Math.round(scoredRatio * 100),
         is_hot: scoredRatio >= 0.85,
         odds: realOdds.over15 || 1.40,
       });
