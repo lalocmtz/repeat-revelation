@@ -7,6 +7,7 @@ interface PatternTableProps {
   onAddToSlip: (pattern: Pattern) => void;
   slipIds: string[];
   totalCount?: number;
+  isEmpty?: boolean; // true when DB has no opportunities at all (pipeline not run yet)
 }
 
 const typeColorMap: Record<string, string> = {
