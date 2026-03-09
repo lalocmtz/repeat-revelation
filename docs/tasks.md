@@ -270,20 +270,16 @@ select cron.schedule(
 
 ---
 
-### 3.2 Filters (Functional) [ ]
+### 3.2 Filters (Functional) ✅
 
-Currently filters are **UI-only** — they don't filter the actual data.
-
-- [ ] **Time filter** — filter `opportunities` by `next_match_time` date
-  - Hoy: `next_match_time` between `startOfDay(today)` and `endOfDay(today)`
-  - Mañana: same for tomorrow
-  - 3 días: next 3 days range
-- [ ] **Market tab** — filter by `market` column (already partially working via mock)
-  - Fix `useFootballData` to pass market filter to DB query OR filter client-side from full dataset
-- [ ] **League filter** — dropdown with top 11 leagues
-- [ ] **Context filter** — General / Home / Away (maps to `context` column)
-- [ ] **Minimum repetition** — slider (min hits/sample %)
-- [ ] **Odds range** — min/max odds slider
+- [x] **Time filter** — Hoy / Mañana / 3 Días filters by `matchDateStr` (derived from `next_match_time`)
+- [x] **Market tab** — filters by `market[]` array mapped from DB `market` column
+- [x] **League filter** — dynamic dropdown populated from real data, with active state + clear button
+- [x] **Empty state** — shown when no patterns match filters
+- [x] **Dynamic locked count** — "Desbloquea N patrones premium" uses real count
+- [ ] **Context filter** — General / Home / Away (maps to `context` column) — deferred v1
+- [ ] **Minimum repetition slider** — deferred v1
+- [ ] **Odds range slider** — deferred v1
 
 **Implementation approach** (client-side filtering from full dataset):
 ```typescript
