@@ -119,12 +119,16 @@ export function useFootballData() {
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
+      // Use a wide window: any opportunity computed in the last 48h
+      const cutoff = new Date();
+      cutoff.setHours(cutoff.getHours() - 48);
+
       const { data, error: dbError } = await supabase
         .from("opportunities")
         .select("*")
-        .gt("expires_at", new Date().toISOString())
+        .gt("computed_at", cutoff.toISOString())
         .order("strength", { ascending: false })
-        .limit(200)
+        .limit(300)
         .abortSignal(controller.signal);
 
       clearTimeout(timeout);
