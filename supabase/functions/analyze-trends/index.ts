@@ -298,10 +298,11 @@ function analyzeTeamTrends(
   for (const opp of opps) {
     const key = `${opp.team_id}-${opp.market}-${opp.context}`;
     const existing = bestByMarket.get(key);
-    // Prefer higher strength, then larger sample
+    const oppRatio = opp.hits / opp.sample;
+    const existingRatio = existing ? existing.hits / existing.sample : 0;
     if (!existing || 
-        opp.strength > existing.strength || 
-        (opp.strength === existing.strength && opp.sample > existing.sample)) {
+        oppRatio > existingRatio || 
+        (oppRatio === existingRatio && opp.sample > existing.sample)) {
       bestByMarket.set(key, opp);
     }
   }
