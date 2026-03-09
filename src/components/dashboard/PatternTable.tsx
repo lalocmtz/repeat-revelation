@@ -18,7 +18,7 @@ const typeColorMap: Record<string, string> = {
   CARDS: "bg-yellow-500/20 text-yellow-400",
 };
 
-const PatternTable = ({ patterns, onAddToSlip, slipIds, totalCount = 0 }: PatternTableProps) => {
+const PatternTable = ({ patterns, onAddToSlip, slipIds, totalCount = 0, isEmpty = false }: PatternTableProps) => {
   const { formatOdds } = useOdds();
 
   if (patterns.length === 0) {
@@ -26,10 +26,14 @@ const PatternTable = ({ patterns, onAddToSlip, slipIds, totalCount = 0 }: Patter
       <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 px-6">
         <div className="text-4xl opacity-20">⚽</div>
         <p className="text-sm font-medium text-foreground text-center">
-          No hay patrones fuertes con estos filtros.
+          {isEmpty
+            ? "No hay oportunidades calculadas aún."
+            : "No hay patrones fuertes con estos filtros."}
         </p>
         <p className="text-xs text-muted-foreground text-center max-w-xs">
-          Prueba cambiar el período de tiempo, el mercado o la liga.
+          {isEmpty
+            ? "El análisis se ejecuta automáticamente cada 6 horas. Los patrones aparecerán pronto."
+            : "Prueba cambiar el período de tiempo, el mercado o la liga."}
         </p>
       </div>
     );
