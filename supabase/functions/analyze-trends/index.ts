@@ -287,7 +287,6 @@ function analyzeTeamTrends(
         context: "general",
         hits: cleanSheets,
         sample: sampleSize,
-        strength: Math.round(cleanSheetRatio * 100),
         is_hot: cleanSheetRatio >= 0.60,
         odds: 2.20,
       });
