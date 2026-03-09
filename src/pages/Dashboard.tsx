@@ -21,7 +21,7 @@ function getDateStr(offsetDays: number): string {
 const Dashboard = () => {
   const { user, isPremium, loading: authLoading } = useAuth();
   const { patterns: apiPatterns, loading: dataLoading, error, refetch } = useFootballData();
-  const [activeTime, setActiveTime] = useState("Hoy");
+  const [activeTime, setActiveTime] = useState("3 Días");
   const [activeTab, setActiveTab] = useState("Popular");
   const [activeLeague, setActiveLeague] = useState("Todas");
   const [slipSelections, setSlipSelections] = useState<Pattern[]>([]);
