@@ -552,10 +552,12 @@ serve(async (req) => {
       totalOpportunities: allOpportunities.length 
     });
 
-    // ─── Step 8: Rank by strength, then sample size ───
+    // ─── Step 8: Rank by hit ratio, then sample size ───
     allOpportunities.sort((a, b) => {
-      const strengthDiff = b.strength - a.strength;
-      return strengthDiff !== 0 ? strengthDiff : b.sample - a.sample;
+      const ratioA = a.hits / a.sample;
+      const ratioB = b.hits / b.sample;
+      const ratioDiff = ratioB - ratioA;
+      return ratioDiff !== 0 ? ratioDiff : b.sample - a.sample;
     });
 
     const topOpps = allOpportunities.slice(0, 150); // Keep more opportunities
