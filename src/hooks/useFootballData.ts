@@ -115,8 +115,15 @@ export function useFootballData() {
     setLoading(true);
     setError(null);
 
+    // Safety net: force loading=false after 10s no matter what
+    const safetyTimer = setTimeout(() => {
+      console.warn("[useFootballData] Safety timeout triggered");
+      setLoading(false);
+      setError("La consulta tardó demasiado. Intenta de nuevo.");
+    }, 10000);
+
     try {
-      console.log("[useFootballData] Starting fetch...");
+      console.log("[useFootballData] Fetching opportunities...");
 
       const { data, error: dbError } = await supabase
         .from("opportunities")
@@ -124,23 +131,20 @@ export function useFootballData() {
         .order("strength", { ascending: false })
         .limit(300);
 
-      console.log("[useFootballData] Response:", { count: data?.length, error: dbError });
+      clearTimeout(safetyTimer);
+      console.log("[useFootballData] Got", data?.length ?? 0, "rows, error:", dbError?.message ?? null);
 
-      if (dbError) {
-        console.error("[useFootballData] DB error:", dbError);
-        throw dbError;
-      }
+      if (dbError) throw dbError;
 
       if (!data || data.length === 0) {
-        console.warn("[useFootballData] No data returned from DB");
         setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
         setPatterns([]);
       } else {
-        console.log("[useFootballData] Loaded", data.length, "opportunities. Sample:", data[0]);
         setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
       }
     } catch (e) {
-      console.error("[useFootballData] Catch error:", e);
+      clearTimeout(safetyTimer);
+      console.error("[useFootballData] Error:", e);
       setError(e instanceof Error ? e.message : "Error al cargar datos");
       setPatterns([]);
     } finally {
