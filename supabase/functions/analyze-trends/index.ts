@@ -455,10 +455,10 @@ serve(async (req) => {
         )
       );
       for (const { eid, d } of oddsResults) {
-        if (!d?.response?.odds) continue;
+        if (!d?.response?.odds || !Array.isArray(d.response.odds)) continue;
         const p: Record<string, number> = {};
         for (const g of d.response.odds) {
-          if (!g?.items) continue;
+          if (!g?.items || !Array.isArray(g.items)) continue;
           const b365 = g?.bookmakerId === 2;
           for (const item of g.items) {
             const n = (item?.name || "").toLowerCase();
