@@ -20,11 +20,17 @@ function getDateStr(offsetDays: number): string {
 
 const Dashboard = () => {
   const { user, isPremium, loading: authLoading } = useAuth();
-  const { patterns: apiPatterns, loading: dataLoading, error, refetch } = useFootballData();
+  const { patterns: apiPatterns, loading: dataLoading, error, status, refetch } = useFootballData();
   const [activeTime, setActiveTime] = useState("3 Días");
   const [activeTab, setActiveTab] = useState("Popular");
   const [activeLeague, setActiveLeague] = useState("Todas");
   const [slipSelections, setSlipSelections] = useState<Pattern[]>([]);
+
+  // Determine the effective state for UI rendering
+  const isInitialLoading = status === "idle" || status === "loading";
+  const hasError = status === "error";
+  const isEmpty = status === "empty";
+  const hasData = status === "success" && apiPatterns.length > 0;
 
   // Derive available leagues from loaded data
   const availableLeagues = useMemo(() => {
