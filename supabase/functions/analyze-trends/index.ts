@@ -232,7 +232,6 @@ function analyzeTeamTrends(
           context: "home",
           hits: homeWins,
           sample: homeMatches.length,
-          strength: Math.round(homeWinRatio * 100),
           is_hot: homeWinRatio >= 0.85,
           odds: realOdds.homeWin || 1.50,
         });
