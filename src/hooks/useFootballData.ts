@@ -48,9 +48,9 @@ function mapTypeColor(type: string): string {
 // Map DB market string → market tags for tab filtering
 function mapMarketTags(market: string): string[] {
   const tags: string[] = ["Popular"];
-  const m = market.toLowerCase();
+  const m = market.toLowerCase().trim();
   if (m.includes("over 2.5")) tags.push("Over 2.5");
-  if (m.includes("over 1.5") || m.includes("scored") || m === "scored") tags.push("Over 1.5");
+  if (m.includes("over 1.5") || m.includes("scored")) tags.push("Over 1.5");
   if (m.includes("btts")) tags.push("BTTS");
   if (m.includes("corner")) tags.push("Corners");
   if (m.includes("card") || m.includes("booking")) tags.push("Cards");
@@ -115,40 +115,47 @@ export function useFootballData() {
     setLoading(true);
     setError(null);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    // Guarantee loading ends within 12s regardless of network state
+    let done = false;
+    const safetyTimer = setTimeout(() => {
+      if (!done) {
+        console.warn("[useFootballData] 12s safety timeout — forcing done");
+        setLoading(false);
+        setError("La consulta tardó demasiado. Intenta de nuevo.");
+      }
+    }, 12000);
 
     try {
-      // Use a wide window: any opportunity computed in the last 48h
-      const cutoff = new Date();
-      cutoff.setHours(cutoff.getHours() - 48);
+      console.log("[useFootballData] Starting query to opportunities table...");
 
       const { data, error: dbError } = await supabase
         .from("opportunities")
         .select("*")
-        .gt("computed_at", cutoff.toISOString())
         .order("strength", { ascending: false })
-        .limit(300)
-        .abortSignal(controller.signal);
+        .limit(300);
 
-      clearTimeout(timeout);
+      done = true;
+      clearTimeout(safetyTimer);
 
-      if (dbError) throw dbError;
+      console.log("[useFootballData] Query complete — rows:", data?.length ?? 0, "| error:", dbError?.message ?? "none");
+
+      if (dbError) {
+        console.error("[useFootballData] DB error detail:", JSON.stringify(dbError));
+        throw dbError;
+      }
 
       if (!data || data.length === 0) {
+        console.warn("[useFootballData] Empty result set");
         setError("No hay oportunidades calculadas aún. El análisis se ejecuta cada 6h.");
         setPatterns([]);
       } else {
         setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
       }
     } catch (e) {
-      clearTimeout(timeout);
-      if (e instanceof DOMException && e.name === "AbortError") {
-        setError("La consulta tardó demasiado. Intenta de nuevo.");
-      } else {
-        console.error("useFootballData error:", e);
-        setError(e instanceof Error ? e.message : "Error al cargar datos");
-      }
+      done = true;
+      clearTimeout(safetyTimer);
+      console.error("[useFootballData] Caught exception:", e);
+      setError(e instanceof Error ? e.message : "Error al cargar datos");
       setPatterns([]);
     } finally {
       setLoading(false);
