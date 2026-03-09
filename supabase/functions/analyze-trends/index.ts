@@ -101,7 +101,7 @@ interface Opportunity {
   context: string;
   hits: number;
   sample: number;
-  strength: number; // Computed as hits/sample * 100
+  // strength is a GENERATED ALWAYS column — do NOT include in inserts
   is_hot: boolean;
   next_match_id: number | null;
   next_match_home: string | null;
