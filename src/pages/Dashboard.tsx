@@ -20,11 +20,17 @@ function getDateStr(offsetDays: number): string {
 
 const Dashboard = () => {
   const { user, isPremium, loading: authLoading } = useAuth();
-  const { patterns: apiPatterns, loading: dataLoading, error, refetch } = useFootballData();
+  const { patterns: apiPatterns, loading: dataLoading, error, status, refetch } = useFootballData();
   const [activeTime, setActiveTime] = useState("3 Días");
   const [activeTab, setActiveTab] = useState("Popular");
   const [activeLeague, setActiveLeague] = useState("Todas");
   const [slipSelections, setSlipSelections] = useState<Pattern[]>([]);
+
+  // Determine the effective state for UI rendering
+  const isInitialLoading = status === "idle" || status === "loading";
+  const hasError = status === "error";
+  const isEmpty = status === "empty";
+  const hasData = status === "success" && apiPatterns.length > 0;
 
   // Derive available leagues from loaded data
   const availableLeagues = useMemo(() => {
@@ -107,15 +113,16 @@ const Dashboard = () => {
           <MarketTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
           {/* Loading state */}
-          {dataLoading && (
+          {isInitialLoading && (
             <div className="flex flex-1 flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">Cargando patrones...</p>
+              <p className="text-xs text-muted-foreground/60">Esto puede tomar unos segundos</p>
             </div>
           )}
 
           {/* Error state */}
-          {!dataLoading && error && (
+          {!isInitialLoading && hasError && (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
                 <AlertTriangle className="h-6 w-6 text-destructive" />
@@ -131,14 +138,25 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Data loaded — even if empty, render the table (it handles empty state) */}
-          {!dataLoading && !error && (
+          {/* Empty state - pipeline has no data */}
+          {!isInitialLoading && isEmpty && (
+            <PatternTable
+              patterns={[]}
+              onAddToSlip={handleAddToSlip}
+              slipIds={slipIds}
+              totalCount={0}
+              isEmpty={true}
+            />
+          )}
+
+          {/* Success state with data (or filtered to empty) */}
+          {!isInitialLoading && hasData && (
             <PatternTable
               patterns={visiblePatterns}
               onAddToSlip={handleAddToSlip}
               slipIds={slipIds}
               totalCount={filteredPatterns.length}
-              isEmpty={apiPatterns.length === 0}
+              isEmpty={false}
             />
           )}
         </div>
@@ -151,7 +169,7 @@ const Dashboard = () => {
         )}
 
         {/* Premium overlay */}
-        {showOverlay && !dataLoading && (
+        {showOverlay && !isInitialLoading && (
           <div className="absolute inset-0 top-[50%] z-30 flex items-end justify-center">
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent" />
             <div className="relative z-10 mb-12 md:mb-16 flex flex-col items-center gap-3 text-center px-6">

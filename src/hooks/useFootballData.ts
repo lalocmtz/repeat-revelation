@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
 function getTeamAbbr(name: string): string {
   if (!name) return "???";
   const abbrs: Record<string, string> = {
@@ -13,6 +15,7 @@ function getTeamAbbr(name: string): string {
     "PSG": "PSG", "Paris Saint-Germain": "PSG",
     "Santos Laguna": "SAN", "Club America": "AME", "Cruz Azul": "CAZ",
     "Monterrey": "MTY", "Tigres UANL": "TIG",
+    "Sassuolo": "SAS", "Tondela": "TON", "Espanyol": "ESP",
   };
   return abbrs[name] || name.substring(0, 3).toUpperCase();
 }
@@ -57,6 +60,8 @@ function mapMarketTags(market: string): string[] {
   return tags;
 }
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+
 export interface RawOpportunity {
   id: string;
   team_name: string;
@@ -78,7 +83,11 @@ export interface RawOpportunity {
   team_id: number;
 }
 
-function opportunityToPattern(row: RawOpportunity): Pattern & { matchDateStr: string | null } {
+export type PatternWithDate = Pattern & { matchDateStr: string | null };
+
+export type FetchStatus = "idle" | "loading" | "success" | "empty" | "error";
+
+function opportunityToPattern(row: RawOpportunity): PatternWithDate {
   const patternType = (["GOLES", "BTTS", "CORNERS", "RESULT", "CARDS"].includes(row.pattern_type)
     ? row.pattern_type
     : "GOLES") as Pattern["type"];
@@ -104,78 +113,96 @@ function opportunityToPattern(row: RawOpportunity): Pattern & { matchDateStr: st
   };
 }
 
-export type PatternWithDate = Pattern & { matchDateStr: string | null };
+// ─── Hook ───────────────────────────────────────────────────────────────────
+
+const FETCH_TIMEOUT_MS = 15000; // 15 seconds (Supabase can be slow on cold starts)
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 2000;
 
 export function useFootballData() {
   const [patterns, setPatterns] = useState<PatternWithDate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<FetchStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const retryCountRef = useRef(0);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRetry = false) => {
     if (!mountedRef.current) return;
 
-    setLoading(true);
+    if (!isRetry) {
+      retryCountRef.current = 0;
+    }
+
+    setStatus("loading");
     setError(null);
 
-    // Abort controller to cancel in-flight request on unmount
-    const controller = new AbortController();
-
-    // 8-second safety timeout
-    const safetyTimer = setTimeout(() => {
-      console.warn("[useFootballData] 8s safety timeout — aborting & showing empty state");
-      controller.abort();
-      if (mountedRef.current) {
-        setLoading(false);
-        setError("La consulta tardó demasiado. Intenta de nuevo.");
-      }
-    }, 8000);
+    console.log(`[useFootballData] Querying opportunities... (attempt ${retryCountRef.current + 1}/${MAX_RETRIES + 1})`);
+    const startTime = Date.now();
 
     try {
-      console.log("[useFootballData] Querying opportunities...");
-
-      const { data, error: dbError } = await supabase
+      // Create a promise race between the query and a timeout
+      const queryPromise = supabase
         .from("opportunities")
         .select("*")
         .order("strength", { ascending: false })
-        .limit(300)
-        .abortSignal(controller.signal);
+        .limit(300);
 
-      clearTimeout(safetyTimer);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("TIMEOUT")), FETCH_TIMEOUT_MS);
+      });
+
+      const { data, error: dbError } = await Promise.race([queryPromise, timeoutPromise]);
 
       if (!mountedRef.current) return;
 
-      console.log(`[useFootballData] Done — rows: ${data?.length ?? 0} | error: ${dbError?.message ?? "none"}`);
+      const elapsed = Date.now() - startTime;
+      console.log(`[useFootballData] Query completed in ${elapsed}ms | rows: ${data?.length ?? 0} | error: ${dbError?.message ?? "none"}`);
 
       if (dbError) {
         console.error("[useFootballData] DB error:", JSON.stringify(dbError));
-        setError(dbError.message || "Error al cargar datos");
+        throw new Error(dbError.message || "Error de base de datos");
+      }
+
+      if (!data || data.length === 0) {
+        console.log("[useFootballData] Empty result — status: empty");
         setPatterns([]);
-      } else if (!data || data.length === 0) {
-        console.warn("[useFootballData] Empty result — showing empty state");
-        // Don't show an error — just empty patterns (table will show empty state)
-        setPatterns([]);
+        setStatus("empty");
         setError(null);
       } else {
         console.log(`[useFootballData] Mapping ${data.length} opportunities to patterns`);
-        setPatterns((data as RawOpportunity[]).map(opportunityToPattern));
+        const mapped = (data as RawOpportunity[]).map(opportunityToPattern);
+        setPatterns(mapped);
+        setStatus("success");
         setError(null);
       }
     } catch (e: unknown) {
-      clearTimeout(safetyTimer);
       if (!mountedRef.current) return;
 
-      // AbortError means we already set the timeout error above
-      if (e instanceof Error && e.name === "AbortError") {
+      const elapsed = Date.now() - startTime;
+      const errorMsg = e instanceof Error ? e.message : "Error desconocido";
+      console.error(`[useFootballData] Error after ${elapsed}ms:`, errorMsg);
+
+      // Retry logic for timeouts and network errors
+      const isRetryable = errorMsg === "TIMEOUT" || errorMsg.includes("network") || errorMsg.includes("fetch");
+      
+      if (isRetryable && retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current++;
+        console.log(`[useFootballData] Retrying in ${RETRY_DELAY_MS}ms... (retry ${retryCountRef.current}/${MAX_RETRIES})`);
+        setTimeout(() => {
+          if (mountedRef.current) {
+            fetchData(true);
+          }
+        }, RETRY_DELAY_MS);
         return;
       }
 
-      console.error("[useFootballData] Exception:", e);
-      setError(e instanceof Error ? e.message : "Error al cargar datos");
+      // Final failure
       setPatterns([]);
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
+      setStatus("error");
+      if (errorMsg === "TIMEOUT") {
+        setError("La consulta tardó demasiado. Verifica tu conexión e intenta de nuevo.");
+      } else {
+        setError(errorMsg);
       }
     }
   }, []);
@@ -188,5 +215,14 @@ export function useFootballData() {
     };
   }, [fetchData]);
 
-  return { patterns, loading, error, refetch: fetchData };
+  // Derived state for backwards compatibility
+  const loading = status === "idle" || status === "loading";
+
+  return { 
+    patterns, 
+    loading, 
+    error, 
+    status,
+    refetch: () => fetchData(false),
+  };
 }
