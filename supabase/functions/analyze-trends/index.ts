@@ -162,7 +162,6 @@ function analyzeTeamTrends(
         context: "general",
         hits: over25,
         sample: sampleSize,
-        strength: Math.round(over25Ratio * 100),
         is_hot: over25Ratio >= 0.85,
         odds: realOdds.over25 || 1.85,
       });
