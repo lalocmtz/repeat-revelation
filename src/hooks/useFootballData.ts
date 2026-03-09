@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import type { Pattern } from "@/data/mockPatterns";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -48,7 +47,6 @@ function mapTypeColor(type: string): string {
   }
 }
 
-// Map DB market string → market tags for tab filtering
 function mapMarketTags(market: string): string[] {
   const tags: string[] = ["Popular"];
   const m = market.toLowerCase().trim();
@@ -113,9 +111,48 @@ function opportunityToPattern(row: RawOpportunity): PatternWithDate {
   };
 }
 
+// ─── Direct REST fetch (bypasses Supabase JS client) ────────────────────────
+
+async function fetchOpportunitiesREST(signal: AbortSignal): Promise<RawOpportunity[]> {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  console.log("[useFootballData] ENV check — URL:", url ? `${url.substring(0, 30)}...` : "MISSING", "| Key:", key ? `${key.substring(0, 20)}...` : "MISSING");
+
+  if (!url || !key) {
+    throw new Error("Supabase configuration missing");
+  }
+
+  const endpoint = `${url}/rest/v1/opportunities?select=*&order=strength.desc.nullslast&limit=300`;
+
+  console.log("[useFootballData] Fetching:", endpoint.substring(0, 80) + "...");
+
+  const response = await fetch(endpoint, {
+    signal,
+    headers: {
+      "apikey": key,
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+  });
+
+  console.log("[useFootballData] Response status:", response.status, response.statusText);
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("[useFootballData] Error body:", body);
+    throw new Error(`HTTP ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  console.log("[useFootballData] Parsed rows:", data?.length ?? 0);
+  return data as RawOpportunity[];
+}
+
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
-const FETCH_TIMEOUT_MS = 15000; // 15 seconds (Supabase can be slow on cold starts)
+const FETCH_TIMEOUT_MS = 20000; // 20 seconds
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 2000;
 
@@ -136,74 +173,62 @@ export function useFootballData() {
     setStatus("loading");
     setError(null);
 
-    console.log(`[useFootballData] Querying opportunities... (attempt ${retryCountRef.current + 1}/${MAX_RETRIES + 1})`);
+    const attempt = retryCountRef.current + 1;
+    console.log(`[useFootballData] Starting fetch (attempt ${attempt}/${MAX_RETRIES + 1})`);
     const startTime = Date.now();
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log(`[useFootballData] Aborting fetch after ${FETCH_TIMEOUT_MS}ms`);
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
+
     try {
-      // Create a promise race between the query and a timeout
-      const queryPromise = supabase
-        .from("opportunities")
-        .select("*")
-        .order("strength", { ascending: false })
-        .limit(300);
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("TIMEOUT")), FETCH_TIMEOUT_MS);
-      });
-
-      const { data, error: dbError } = await Promise.race([queryPromise, timeoutPromise]);
+      const data = await fetchOpportunitiesREST(controller.signal);
+      clearTimeout(timeoutId);
 
       if (!mountedRef.current) return;
 
       const elapsed = Date.now() - startTime;
-      console.log(`[useFootballData] Query completed in ${elapsed}ms | rows: ${data?.length ?? 0} | error: ${dbError?.message ?? "none"}`);
+      console.log(`[useFootballData] Success in ${elapsed}ms — ${data.length} rows`);
 
-      if (dbError) {
-        console.error("[useFootballData] DB error:", JSON.stringify(dbError));
-        throw new Error(dbError.message || "Error de base de datos");
-      }
-
-      if (!data || data.length === 0) {
-        console.log("[useFootballData] Empty result — status: empty");
+      if (data.length === 0) {
         setPatterns([]);
         setStatus("empty");
         setError(null);
       } else {
-        console.log(`[useFootballData] Mapping ${data.length} opportunities to patterns`);
-        const mapped = (data as RawOpportunity[]).map(opportunityToPattern);
+        const mapped = data.map(opportunityToPattern);
         setPatterns(mapped);
         setStatus("success");
         setError(null);
       }
     } catch (e: unknown) {
+      clearTimeout(timeoutId);
       if (!mountedRef.current) return;
 
       const elapsed = Date.now() - startTime;
-      const errorMsg = e instanceof Error ? e.message : "Error desconocido";
+      const isAbort = e instanceof DOMException && e.name === "AbortError";
+      const errorMsg = isAbort ? "TIMEOUT" : (e instanceof Error ? e.message : "Error desconocido");
       console.error(`[useFootballData] Error after ${elapsed}ms:`, errorMsg);
 
-      // Retry logic for timeouts and network errors
-      const isRetryable = errorMsg === "TIMEOUT" || errorMsg.includes("network") || errorMsg.includes("fetch");
-      
+      // Retry on timeout/network errors
+      const isRetryable = isAbort || errorMsg.includes("network") || errorMsg.includes("fetch") || errorMsg.includes("Failed to fetch");
+
       if (isRetryable && retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current++;
         console.log(`[useFootballData] Retrying in ${RETRY_DELAY_MS}ms... (retry ${retryCountRef.current}/${MAX_RETRIES})`);
         setTimeout(() => {
-          if (mountedRef.current) {
-            fetchData(true);
-          }
+          if (mountedRef.current) fetchData(true);
         }, RETRY_DELAY_MS);
         return;
       }
 
-      // Final failure
       setPatterns([]);
       setStatus("error");
-      if (errorMsg === "TIMEOUT") {
-        setError("La consulta tardó demasiado. Verifica tu conexión e intenta de nuevo.");
-      } else {
-        setError(errorMsg);
-      }
+      setError(isAbort
+        ? "La consulta tardó demasiado. Verifica tu conexión e intenta de nuevo."
+        : errorMsg
+      );
     }
   }, []);
 
@@ -215,13 +240,12 @@ export function useFootballData() {
     };
   }, [fetchData]);
 
-  // Derived state for backwards compatibility
   const loading = status === "idle" || status === "loading";
 
-  return { 
-    patterns, 
-    loading, 
-    error, 
+  return {
+    patterns,
+    loading,
+    error,
     status,
     refetch: () => fetchData(false),
   };
