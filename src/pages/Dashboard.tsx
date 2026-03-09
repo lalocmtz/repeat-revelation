@@ -169,7 +169,7 @@ const Dashboard = () => {
         )}
 
         {/* Premium overlay */}
-        {showOverlay && !dataLoading && (
+        {showOverlay && !isInitialLoading && (
           <div className="absolute inset-0 top-[50%] z-30 flex items-end justify-center">
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent" />
             <div className="relative z-10 mb-12 md:mb-16 flex flex-col items-center gap-3 text-center px-6">
