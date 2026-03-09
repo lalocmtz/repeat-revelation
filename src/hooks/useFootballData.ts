@@ -53,6 +53,8 @@ function mapMarketTags(market: string): string[] {
   if (m.includes("over 2.5")) tags.push("Over 2.5");
   if (m.includes("over 1.5") || m.includes("scored")) tags.push("Over 1.5");
   if (m.includes("btts")) tags.push("BTTS");
+  if (m === "result") tags.push("Rachas");
+  if (m.includes("clean sheet")) tags.push("Clean Sheet");
   if (m.includes("corner")) tags.push("Corners");
   if (m.includes("card") || m.includes("booking")) tags.push("Cards");
   return tags;

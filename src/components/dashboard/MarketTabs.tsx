@@ -3,7 +3,7 @@ interface MarketTabsProps {
   onTabChange: (tab: string) => void;
 }
 
-const tabs = ["Popular", "Over 1.5", "Over 2.5", "BTTS", "Corners", "Cards"];
+const tabs = ["Popular", "Over 1.5", "Over 2.5", "BTTS", "Rachas", "Clean Sheet"];
 
 const MarketTabs = ({ activeTab, onTabChange }: MarketTabsProps) => {
   return (

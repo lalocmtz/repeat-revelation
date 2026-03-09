@@ -10,84 +10,56 @@ const corsHeaders = {
 const RAPIDAPI_HOST = "free-api-live-football-data.p.rapidapi.com";
 const BASE_URL = `https://${RAPIDAPI_HOST}`;
 
-// ─── Top leagues only (saves API calls) ───
-const TOP_LEAGUE_IDS = new Set([
-  42,   // Champions League
-  73,   // Europa League
-  47,   // Premier League
-  87,   // La Liga
-  55,   // Serie A
-  54,   // Bundesliga
-  53,   // Ligue 1
-  239,  // Liga MX
-  41,   // MLS
-  130,  // Eredivisie
-  61,   // Liga Portugal
+// Only fetch odds for major leagues (save API credits)
+const ODDS_LEAGUE_IDS = new Set([
+  42, 73, 47, 87, 55, 54, 53, 239, 41, 130, 61,
 ]);
 
-const LEAGUE_NAMES: Record<number, string> = {
-  42: "Champions League", 73: "Europa League", 47: "Premier League",
-  87: "La Liga", 55: "Serie A", 54: "Bundesliga", 53: "Ligue 1",
-  239: "Liga MX", 41: "MLS", 130: "Eredivisie", 61: "Liga Portugal",
-};
-
-// ─── Structured Logging ───
-function log(level: "INFO" | "WARN" | "ERROR", message: string, data?: Record<string, unknown>) {
-  const timestamp = new Date().toISOString();
-  const logObj = { timestamp, level, message, ...data };
-  console.log(JSON.stringify(logObj));
+// ─── Logging ───
+function log(level: "INFO" | "WARN" | "ERROR", msg: string, data?: Record<string, unknown>) {
+  console.log(JSON.stringify({ ts: new Date().toISOString(), level, msg, ...data }));
 }
 
 async function rapidApiFetch(path: string, apiKey: string): Promise<any> {
-  try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: {
-        "x-rapidapi-host": RAPIDAPI_HOST,
-        "x-rapidapi-key": apiKey,
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      log("ERROR", `RapidAPI error [${res.status}] ${path}`, { response: text.substring(0, 200) });
-      throw new Error(`RapidAPI ${res.status}`);
-    }
-    return res.json();
-  } catch (e) {
-    log("ERROR", `RapidAPI fetch failed: ${path}`, { error: e instanceof Error ? e.message : String(e) });
-    throw e;
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "x-rapidapi-host": RAPIDAPI_HOST, "x-rapidapi-key": apiKey },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    log("ERROR", `API ${res.status} ${path}`, { body: text.substring(0, 200) });
+    throw new Error(`RapidAPI ${res.status}`);
   }
+  return res.json();
 }
 
-function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}${m}${d}`;
+function fmtDate(date: Date): string {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatDateISO(date: Date): string {
+function fmtDateISO(date: Date): string {
   return date.toISOString().split("T")[0];
 }
 
-// ─── Trend Analysis Logic ───
+// ─── Types ───
+interface MatchStat {
+  matchId: number;
+  date: string;
+  goalsScored: number;
+  goalsConceded: number;
+  totalGoals: number;
+  isHome: boolean;
+  btts: boolean;
+  won: boolean;
+  lost: boolean;
+  drawn: boolean;
+}
 
 interface TeamStats {
   teamId: number;
   teamName: string;
   leagueId: number;
   leagueName: string;
-  matches: {
-    matchId: number;
-    date: string;
-    goalsScored: number;
-    goalsConceded: number;
-    totalGoals: number;
-    isHome: boolean;
-    btts: boolean;
-    won: boolean;
-    lost: boolean;
-    drawn: boolean;
-  }[];
+  matches: MatchStat[];
 }
 
 interface Opportunity {
@@ -101,7 +73,6 @@ interface Opportunity {
   context: string;
   hits: number;
   sample: number;
-  // strength is a GENERATED ALWAYS column — do NOT include in inserts
   is_hot: boolean;
   next_match_id: number | null;
   next_match_home: string | null;
@@ -110,506 +81,472 @@ interface Opportunity {
   odds: number;
 }
 
-function analyzeTeamTrends(
-  stats: TeamStats, 
-  upcomingMatches: Map<number, any>, 
-  matchOddsMap: Map<number, Record<string, number>>
+// ─── Consecutive streak counter ───
+function countStreak(matches: MatchStat[], cond: (m: MatchStat) => boolean): number {
+  let c = 0;
+  for (const m of matches) {
+    if (cond(m)) c++;
+    else break;
+  }
+  return c;
+}
+
+// ─── Trend Analysis ───
+function analyzeTeam(
+  stats: TeamStats,
+  nextMatch: any | undefined,
+  odds: Record<string, number>
 ): Opportunity[] {
   const opps: Opportunity[] = [];
   const matches = stats.matches.slice(0, 20);
-  
-  // Minimum 3 matches required for any analysis
-  if (matches.length < 3) return opps;
+  if (matches.length < 3 || !nextMatch) return opps;
 
-  const nextMatch = upcomingMatches.get(stats.teamId);
-  const nextMatchId = nextMatch?.id || null;
-  const nextMatchHome = nextMatch?.home?.name || nextMatch?.home?.longName || null;
-  const nextMatchAway = nextMatch?.away?.name || nextMatch?.away?.longName || null;
-  const nextMatchTime = nextMatch?.status?.utcTime || null;
-
-  // Only generate opportunities for teams with an upcoming match
-  if (!nextMatchId) return opps;
-
-  const realOdds = matchOddsMap.get(nextMatchId) || {};
-
-  const baseFields = {
+  const base = {
     team_id: stats.teamId,
     team_name: stats.teamName,
     league_id: stats.leagueId,
     league_name: stats.leagueName,
-    next_match_id: nextMatchId,
-    next_match_home: nextMatchHome,
-    next_match_away: nextMatchAway,
-    next_match_time: nextMatchTime,
+    next_match_id: nextMatch.id || null,
+    next_match_home: nextMatch.home?.longName || nextMatch.home?.name || null,
+    next_match_away: nextMatch.away?.longName || nextMatch.away?.name || null,
+    next_match_time: nextMatch.status?.utcTime || null,
   };
 
-  // ─── Sample sizes to analyze ───
-  // Use smaller samples (3, 5) if we don't have enough matches
-  const sampleSizes = [3, 5, 10, 15, 20].filter(s => matches.length >= s);
+  // ══════ CONSECUTIVE STREAKS (like the reference) ══════
 
-  for (const sampleSize of sampleSizes) {
-    const sample = matches.slice(0, sampleSize);
+  const winStreak = countStreak(matches, m => m.won);
+  if (winStreak >= 3) {
+    opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+      description: `${stats.teamName} ha ganado sus últimos ${winStreak} partidos`,
+      context: "general", hits: winStreak, sample: winStreak,
+      is_hot: winStreak >= 5, odds: odds.homeWin || 1.50 });
+  }
 
-    // ─── Over 2.5 goals ───
-    const over25 = sample.filter((m) => m.totalGoals > 2).length;
-    const over25Ratio = over25 / sampleSize;
-    if (over25Ratio >= 0.65) { // Lowered threshold from 0.70
-      opps.push({
-        ...baseFields,
-        pattern_type: "GOLES",
-        market: "Over 2.5",
-        description: `Over 2.5 goles en ${over25} de ${sampleSize} partidos`,
-        context: "general",
-        hits: over25,
-        sample: sampleSize,
-        is_hot: over25Ratio >= 0.85,
-        odds: realOdds.over25 || 1.85,
-      });
+  const lossStreak = countStreak(matches, m => m.lost);
+  if (lossStreak >= 3) {
+    opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+      description: `${stats.teamName} ha perdido sus últimos ${lossStreak} partidos`,
+      context: "general", hits: lossStreak, sample: lossStreak,
+      is_hot: lossStreak >= 5, odds: odds.awayWin || 2.00 });
+  }
+
+  const unbeaten = countStreak(matches, m => !m.lost);
+  if (unbeaten >= 4) {
+    opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+      description: `${stats.teamName} invicto en sus últimos ${unbeaten} partidos`,
+      context: "general", hits: unbeaten, sample: unbeaten,
+      is_hot: unbeaten >= 7, odds: odds.homeWin || 1.60 });
+  }
+
+  const o25s = countStreak(matches, m => m.totalGoals > 2);
+  if (o25s >= 3) {
+    opps.push({ ...base, pattern_type: "GOLES", market: "Over 2.5",
+      description: `Over 2.5 goles en los últimos ${o25s} partidos de ${stats.teamName}`,
+      context: "general", hits: o25s, sample: o25s,
+      is_hot: o25s >= 5, odds: odds.over25 || 1.85 });
+  }
+
+  const o15s = countStreak(matches, m => m.totalGoals > 1);
+  if (o15s >= 4) {
+    opps.push({ ...base, pattern_type: "GOLES", market: "Over 1.5",
+      description: `Over 1.5 goles en los últimos ${o15s} partidos de ${stats.teamName}`,
+      context: "general", hits: o15s, sample: o15s,
+      is_hot: o15s >= 6, odds: odds.over15 || 1.30 });
+  }
+
+  const bttss = countStreak(matches, m => m.btts);
+  if (bttss >= 3) {
+    opps.push({ ...base, pattern_type: "BTTS", market: "BTTS",
+      description: `BTTS en los últimos ${bttss} partidos de ${stats.teamName}`,
+      context: "general", hits: bttss, sample: bttss,
+      is_hot: bttss >= 5, odds: odds.btts || 1.72 });
+  }
+
+  const scored = countStreak(matches, m => m.goalsScored > 0);
+  if (scored >= 5) {
+    opps.push({ ...base, pattern_type: "GOLES", market: "Scored",
+      description: `${stats.teamName} ha anotado en sus últimos ${scored} partidos`,
+      context: "general", hits: scored, sample: scored,
+      is_hot: scored >= 8, odds: odds.over15 || 1.40 });
+  }
+
+  const cs = countStreak(matches, m => m.goalsConceded === 0);
+  if (cs >= 3) {
+    opps.push({ ...base, pattern_type: "GOLES", market: "Clean Sheet",
+      description: `Portería a cero en los últimos ${cs} partidos de ${stats.teamName}`,
+      context: "general", hits: cs, sample: cs,
+      is_hot: cs >= 4, odds: 2.20 });
+  }
+
+  // ══════ HOME / AWAY SPECIFIC STREAKS ══════
+  const homeM = matches.filter(m => m.isHome);
+  const awayM = matches.filter(m => !m.isHome);
+
+  if (homeM.length >= 3) {
+    const hw = countStreak(homeM, m => m.won);
+    if (hw >= 3) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} ha ganado sus últimos ${hw} partidos en casa`,
+        context: "home", hits: hw, sample: hw,
+        is_hot: hw >= 5, odds: odds.homeWin || 1.45 });
     }
-
-    // ─── Over 1.5 goals ───
-    const over15 = sample.filter((m) => m.totalGoals > 1).length;
-    const over15Ratio = over15 / sampleSize;
-    if (over15Ratio >= 0.75) { // Lowered threshold from 0.80
-      opps.push({
-        ...baseFields,
-        pattern_type: "GOLES",
-        market: "Over 1.5",
-        description: `Over 1.5 goles en ${over15} de ${sampleSize} partidos`,
-        context: "general",
-        hits: over15,
-        sample: sampleSize,
-        is_hot: over15Ratio >= 0.90,
-        odds: realOdds.over15 || 1.30,
-      });
+    const ho25 = countStreak(homeM, m => m.totalGoals > 2);
+    if (ho25 >= 3) {
+      opps.push({ ...base, pattern_type: "GOLES", market: "Over 2.5",
+        description: `Over 2.5 en los últimos ${ho25} partidos en casa de ${stats.teamName}`,
+        context: "home", hits: ho25, sample: ho25,
+        is_hot: ho25 >= 4, odds: odds.over25 || 1.80 });
     }
-
-    // ─── BTTS (Both Teams To Score) ───
-    const bttsCount = sample.filter((m) => m.btts).length;
-    const bttsRatio = bttsCount / sampleSize;
-    if (bttsRatio >= 0.60) { // Lowered threshold from 0.65
-      opps.push({
-        ...baseFields,
-        pattern_type: "BTTS",
-        market: "BTTS",
-        description: `BTTS en ${bttsCount} de ${sampleSize} partidos`,
-        context: "general",
-        hits: bttsCount,
-        sample: sampleSize,
-        is_hot: bttsRatio >= 0.80,
-        odds: realOdds.btts || 1.72,
-      });
-    }
-
-    // ─── Team scored (goal in match) ───
-    const scoredCount = sample.filter((m) => m.goalsScored > 0).length;
-    const scoredRatio = scoredCount / sampleSize;
-    if (scoredRatio >= 0.70) { // Lowered threshold from 0.75
-      opps.push({
-        ...baseFields,
-        pattern_type: "GOLES",
-        market: "Scored",
-        description: `${stats.teamName} anotó en ${scoredCount} de ${sampleSize} partidos`,
-        context: "general",
-        hits: scoredCount,
-        sample: sampleSize,
-        is_hot: scoredRatio >= 0.85,
-        odds: realOdds.over15 || 1.40,
-      });
-    }
-
-    // ─── Home win streak ───
-    const homeMatches = sample.filter((m) => m.isHome);
-    if (homeMatches.length >= 3) {
-      const homeWins = homeMatches.filter((m) => m.won).length;
-      const homeWinRatio = homeWins / homeMatches.length;
-      if (homeWinRatio >= 0.70) { // Lowered threshold from 0.75
-        opps.push({
-          ...baseFields,
-          pattern_type: "RESULT",
-          market: "Result",
-          description: `Victoria local en ${homeWins} de ${homeMatches.length} partidos en casa`,
-          context: "home",
-          hits: homeWins,
-          sample: homeMatches.length,
-          is_hot: homeWinRatio >= 0.85,
-          odds: realOdds.homeWin || 1.50,
-        });
-      }
-    }
-
-    // ─── Away win streak ───
-    const awayMatches = sample.filter((m) => !m.isHome);
-    if (awayMatches.length >= 3) {
-      const awayWins = awayMatches.filter((m) => m.won).length;
-      const awayWinRatio = awayWins / awayMatches.length;
-      if (awayWinRatio >= 0.60) { // Lower threshold for away wins (harder to achieve)
-        opps.push({
-          ...baseFields,
-          pattern_type: "RESULT",
-          market: "Result",
-          description: `Victoria visitante en ${awayWins} de ${awayMatches.length} partidos fuera`,
-          context: "away",
-          hits: awayWins,
-          sample: awayMatches.length,
-          is_hot: awayWinRatio >= 0.75,
-          odds: realOdds.awayWin || 2.10,
-        });
-      }
-    }
-
-    // ─── Unbeaten streak (won or drawn) ───
-    const unbeatenCount = sample.filter((m) => !m.lost).length;
-    const unbeatenRatio = unbeatenCount / sampleSize;
-    if (unbeatenRatio >= 0.70 && sampleSize >= 5) {
-      opps.push({
-        ...baseFields,
-        pattern_type: "RESULT",
-        market: "Result",
-        description: `${stats.teamName} invicto en ${unbeatenCount} de ${sampleSize} partidos`,
-        context: "general",
-        hits: unbeatenCount,
-        sample: sampleSize,
-        is_hot: unbeatenRatio >= 0.85,
-        odds: realOdds.homeWin || 1.60,
-      });
-    }
-
-    // ─── Clean sheet streak ───
-    const cleanSheets = sample.filter((m) => m.goalsConceded === 0).length;
-    const cleanSheetRatio = cleanSheets / sampleSize;
-    if (cleanSheetRatio >= 0.40 && sampleSize >= 5) {
-      opps.push({
-        ...baseFields,
-        pattern_type: "GOLES",
-        market: "Clean Sheet",
-        description: `Portería a cero en ${cleanSheets} de ${sampleSize} partidos`,
-        context: "general",
-        hits: cleanSheets,
-        sample: sampleSize,
-        is_hot: cleanSheetRatio >= 0.60,
-        odds: 2.20,
-      });
+    const hl = countStreak(homeM, m => m.lost);
+    if (hl >= 3) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} ha perdido sus últimos ${hl} partidos en casa`,
+        context: "home", hits: hl, sample: hl,
+        is_hot: hl >= 5, odds: odds.awayWin || 1.80 });
     }
   }
 
-  // Deduplicate: keep best per market
-  const bestByMarket = new Map<string, Opportunity>();
-  for (const opp of opps) {
-    const key = `${opp.team_id}-${opp.market}-${opp.context}`;
-    const existing = bestByMarket.get(key);
-    const oppRatio = opp.hits / opp.sample;
-    const existingRatio = existing ? existing.hits / existing.sample : 0;
-    if (!existing || 
-        oppRatio > existingRatio || 
-        (oppRatio === existingRatio && opp.sample > existing.sample)) {
-      bestByMarket.set(key, opp);
+  if (awayM.length >= 3) {
+    const aw = countStreak(awayM, m => m.won);
+    if (aw >= 3) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} ha ganado sus últimos ${aw} partidos fuera`,
+        context: "away", hits: aw, sample: aw,
+        is_hot: aw >= 4, odds: odds.awayWin || 2.10 });
+    }
+    const al = countStreak(awayM, m => m.lost);
+    if (al >= 3) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} ha perdido sus últimos ${al} partidos fuera`,
+        context: "away", hits: al, sample: al,
+        is_hot: al >= 5, odds: odds.homeWin || 1.40 });
+    }
+    const ao25 = countStreak(awayM, m => m.totalGoals > 2);
+    if (ao25 >= 3) {
+      opps.push({ ...base, pattern_type: "GOLES", market: "Over 2.5",
+        description: `Over 2.5 en los últimos ${ao25} partidos fuera de ${stats.teamName}`,
+        context: "away", hits: ao25, sample: ao25,
+        is_hot: ao25 >= 4, odds: odds.over25 || 1.90 });
+    }
+    const abtts = countStreak(awayM, m => m.btts);
+    if (abtts >= 3) {
+      opps.push({ ...base, pattern_type: "BTTS", market: "BTTS",
+        description: `BTTS en los últimos ${abtts} partidos fuera de ${stats.teamName}`,
+        context: "away", hits: abtts, sample: abtts,
+        is_hot: abtts >= 4, odds: odds.btts || 1.80 });
     }
   }
 
-  return Array.from(bestByMarket.values());
+  // ══════ RATIO-BASED (larger samples) ══════
+  for (const sz of [5, 10, 15, 20].filter(s => matches.length >= s)) {
+    const sample = matches.slice(0, sz);
+
+    const o25 = sample.filter(m => m.totalGoals > 2).length;
+    if (o25 / sz >= 0.60) {
+      opps.push({ ...base, pattern_type: "GOLES", market: "Over 2.5",
+        description: `Over 2.5 goles en ${o25} de ${sz} partidos`,
+        context: "general", hits: o25, sample: sz,
+        is_hot: o25 / sz >= 0.80, odds: odds.over25 || 1.85 });
+    }
+
+    const o15 = sample.filter(m => m.totalGoals > 1).length;
+    if (o15 / sz >= 0.70) {
+      opps.push({ ...base, pattern_type: "GOLES", market: "Over 1.5",
+        description: `Over 1.5 goles en ${o15} de ${sz} partidos`,
+        context: "general", hits: o15, sample: sz,
+        is_hot: o15 / sz >= 0.85, odds: odds.over15 || 1.30 });
+    }
+
+    const bt = sample.filter(m => m.btts).length;
+    if (bt / sz >= 0.55) {
+      opps.push({ ...base, pattern_type: "BTTS", market: "BTTS",
+        description: `BTTS en ${bt} de ${sz} partidos`,
+        context: "general", hits: bt, sample: sz,
+        is_hot: bt / sz >= 0.75, odds: odds.btts || 1.72 });
+    }
+
+    const wins = sample.filter(m => m.won).length;
+    if (wins / sz >= 0.60) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} ganó ${wins} de ${sz} partidos`,
+        context: "general", hits: wins, sample: sz,
+        is_hot: wins / sz >= 0.80, odds: odds.homeWin || 1.50 });
+    }
+
+    const losses = sample.filter(m => m.lost).length;
+    if (losses / sz >= 0.60) {
+      opps.push({ ...base, pattern_type: "RESULT", market: "Result",
+        description: `${stats.teamName} perdió ${losses} de ${sz} partidos`,
+        context: "general", hits: losses, sample: sz,
+        is_hot: losses / sz >= 0.80, odds: odds.awayWin || 2.00 });
+    }
+  }
+
+  // Deduplicate: keep best per market+context
+  const best = new Map<string, Opportunity>();
+  for (const o of opps) {
+    const k = `${o.team_id}-${o.market}-${o.context}`;
+    const ex = best.get(k);
+    if (!ex || o.hits > ex.hits || (o.hits === ex.hits && o.sample > ex.sample)) {
+      best.set(k, o);
+    }
+  }
+  return Array.from(best.values());
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MAIN HANDLER
+// ═══════════════════════════════════════════════════════════════
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const runId = crypto.randomUUID().slice(0, 8);
-  log("INFO", "=== Starting trend analysis ===", { runId });
+  log("INFO", "=== analyze-trends START ===", { runId });
 
   try {
     const RAPIDAPI_KEY = Deno.env.get("RAPIDAPI_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!RAPIDAPI_KEY) {
-      log("ERROR", "RAPIDAPI_KEY not configured", { runId });
-      throw new Error("RAPIDAPI_KEY not configured");
-    }
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      log("ERROR", "Supabase config missing", { runId });
-      throw new Error("Supabase config missing");
+    if (!RAPIDAPI_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing env vars");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ─── Step 1: Fetch matches for multiple days ───
-    // 10 days back + today + 2 days forward = 13 dates (more historical data)
+    // ─── 1. Generate date range: 20 days back + 3 forward ───
     const dates: string[] = [];
-    for (let i = 10; i >= -2; i--) {
-      dates.push(formatDate(new Date(Date.now() - i * 86400000)));
+    for (let i = 20; i >= -3; i--) {
+      dates.push(fmtDate(new Date(Date.now() - i * 86400000)));
     }
 
-    log("INFO", `Fetching matches for ${dates.length} dates`, { runId, dates: dates.slice(0, 3).join(", ") + "..." });
+    // ─── 2. Fetch league names + all matches in batches ───
+    const leagueNames = new Map<number, string>();
+    try {
+      const ldata = await rapidApiFetch("/football-get-all-leagues", RAPIDAPI_KEY);
+      for (const l of ldata?.response?.leagues || []) {
+        if (l.id && (l.name || l.localizedName)) {
+          leagueNames.set(l.id, l.name || l.localizedName);
+        }
+      }
+    } catch { /* non-critical */ }
+    log("INFO", "League names loaded", { runId, count: leagueNames.size });
 
     const allMatches: any[] = [];
-    const batchResults = await Promise.all(
-      dates.map((d) =>
-        rapidApiFetch(`/football-get-matches-by-date?date=${d}`, RAPIDAPI_KEY)
-          .then((data) => data?.response?.matches || [])
-          .catch(() => [])
-      )
-    );
-    allMatches.push(...batchResults.flat());
+    const BATCH = 8;
+    for (let i = 0; i < dates.length; i += BATCH) {
+      const batch = dates.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(d =>
+          rapidApiFetch(`/football-get-matches-by-date?date=${d}`, RAPIDAPI_KEY)
+            .then(r => r?.response?.matches || [])
+            .catch(() => [])
+        )
+      );
+      allMatches.push(...results.flat());
+    }
 
-    // Filter to top leagues only
-    const topLeagueMatches = allMatches.filter((m) => TOP_LEAGUE_IDS.has(m.leagueId));
-    log("INFO", `Matches fetched`, { runId, total: allMatches.length, topLeagues: topLeagueMatches.length });
+    const valid = allMatches.filter(m => !m.status?.cancelled);
+    const finished = valid.filter(m => m.status?.finished && m.home?.score !== undefined);
+    const upcoming = valid.filter(m => !m.status?.finished);
 
-    // ─── Step 2: Store finished matches in matches_history ───
-    const finishedMatches = topLeagueMatches.filter(
-      (m) => m.status?.finished && !m.status?.cancelled && m.home?.score !== undefined
-    );
+    log("INFO", "Matches fetched", {
+      runId, total: allMatches.length, valid: valid.length,
+      finished: finished.length, upcoming: upcoming.length,
+    });
 
-    // Note: total_goals and btts are GENERATED ALWAYS columns — do NOT include them
-    const historyRows = finishedMatches.map((m: any) => ({
-      id: m.id,
-      league_id: m.leagueId,
-      league_name: LEAGUE_NAMES[m.leagueId as number] || `League ${m.leagueId}`,
-      home_team_id: m.home.id,
-      home_team_name: m.home.longName || m.home.name,
-      away_team_id: m.away.id,
-      away_team_name: m.away.longName || m.away.name,
-      home_score: m.home.score ?? 0,
-      away_score: m.away.score ?? 0,
-      match_date: formatDateISO(new Date(m.status.utcTime || m.timeTS)),
-      match_time: m.time,
-      status: "finished",
-    }));
+    // ─── 3. Store ALL finished matches (no league filter) ───
+    const historyRows = finished
+      .filter((m: any) => m.home?.id && m.away?.id)
+      .map((m: any) => ({
+        id: m.id,
+        league_id: m.leagueId,
+        league_name: leagueNames.get(m.leagueId) || `League ${m.leagueId}`,
+        home_team_id: m.home.id,
+        home_team_name: m.home.longName || m.home.name || `Team ${m.home.id}`,
+        away_team_id: m.away.id,
+        away_team_name: m.away.longName || m.away.name || `Team ${m.away.id}`,
+        home_score: m.home.score ?? 0,
+        away_score: m.away.score ?? 0,
+        match_date: fmtDateISO(new Date(m.status?.utcTime || m.timeTS || Date.now())),
+        match_time: m.time || null,
+        status: "finished",
+      }));
 
     if (historyRows.length > 0) {
-      const { error: upsertError } = await supabase
-        .from("matches_history")
-        .upsert(historyRows, { onConflict: "id" });
-      if (upsertError) {
-        log("WARN", "Upsert error", { runId, error: upsertError.message });
+      for (let i = 0; i < historyRows.length; i += 500) {
+        const batch = historyRows.slice(i, i + 500);
+        const { error } = await supabase.from("matches_history").upsert(batch, { onConflict: "id" });
+        if (error) log("WARN", "Upsert err", { runId, error: error.message, batch: i });
       }
     }
+    log("INFO", "History stored", { runId, count: historyRows.length });
 
-    log("INFO", `Stored finished matches`, { runId, count: historyRows.length });
-
-    // ─── Step 3: Load existing history from DB ───
-    const topLeagueIds = [...TOP_LEAGUE_IDS];
+    // ─── 4. Load ALL history from DB (NO league filter) ───
     let historyData: any[] = [];
     let page = 0;
-    const pageSize = 1000;
     while (true) {
-      const { data, error: histError } = await supabase
+      const { data, error } = await supabase
         .from("matches_history")
         .select("*")
-        .in("league_id", topLeagueIds)
         .eq("status", "finished")
         .order("match_date", { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-      if (histError) {
-        log("ERROR", "History query error", { runId, error: histError.message });
-        throw histError;
-      }
+        .range(page * 1000, (page + 1) * 1000 - 1);
+      if (error) { log("ERROR", "History query err", { runId, error: error.message }); break; }
       if (!data || data.length === 0) break;
       historyData.push(...data);
-      if (data.length < pageSize) break;
+      if (data.length < 1000) break;
       page++;
     }
+    log("INFO", "History loaded", { runId, rows: historyData.length });
 
-    log("INFO", `History loaded from DB`, { runId, rows: historyData.length });
-
-    // ─── Step 4: Build team stats ───
-    const teamStatsMap = new Map<number, TeamStats>();
-
-    for (const match of historyData) {
+    // ─── 5. Build team stats for ALL teams ───
+    const teamMap = new Map<number, TeamStats>();
+    for (const m of historyData) {
       for (const side of ["home", "away"] as const) {
-        const teamId = side === "home" ? match.home_team_id : match.away_team_id;
-        const teamName = side === "home" ? match.home_team_name : match.away_team_name;
-        const scored = side === "home" ? (match.home_score ?? 0) : (match.away_score ?? 0);
-        const conceded = side === "home" ? (match.away_score ?? 0) : (match.home_score ?? 0);
+        const tid = side === "home" ? m.home_team_id : m.away_team_id;
+        const tname = side === "home" ? m.home_team_name : m.away_team_name;
+        const scored = side === "home" ? (m.home_score ?? 0) : (m.away_score ?? 0);
+        const conceded = side === "home" ? (m.away_score ?? 0) : (m.home_score ?? 0);
 
-        if (!teamStatsMap.has(teamId)) {
-          teamStatsMap.set(teamId, {
-            teamId,
-            teamName,
-            leagueId: match.league_id,
-            leagueName: match.league_name || LEAGUE_NAMES[match.league_id] || `League ${match.league_id}`,
+        if (!teamMap.has(tid)) {
+          teamMap.set(tid, {
+            teamId: tid, teamName: tname,
+            leagueId: m.league_id,
+            leagueName: leagueNames.get(m.league_id) || m.league_name || `League ${m.league_id}`,
             matches: [],
           });
         }
-        teamStatsMap.get(teamId)!.matches.push({
-          matchId: match.id,
-          date: match.match_date,
-          goalsScored: scored,
-          goalsConceded: conceded,
+        teamMap.get(tid)!.matches.push({
+          matchId: m.id, date: m.match_date,
+          goalsScored: scored, goalsConceded: conceded,
           totalGoals: scored + conceded,
           isHome: side === "home",
           btts: scored > 0 && conceded > 0,
-          won: scored > conceded,
-          lost: scored < conceded,
-          drawn: scored === conceded,
+          won: scored > conceded, lost: scored < conceded, drawn: scored === conceded,
         });
       }
     }
-
-    // Sort matches by date descending for each team
-    for (const stats of teamStatsMap.values()) {
-      stats.matches.sort((a, b) => b.date.localeCompare(a.date));
+    for (const s of teamMap.values()) {
+      s.matches.sort((a, b) => b.date.localeCompare(a.date));
     }
+    log("INFO", "Teams built", { runId, teams: teamMap.size });
 
-    log("INFO", `Team stats built`, { runId, teams: teamStatsMap.size });
-
-    // ─── Step 5: Build upcoming matches map ───
-    const upcomingMatches = new Map<number, any>();
-    const upcoming = topLeagueMatches.filter(
-      (m) => !m.status?.finished && !m.status?.cancelled
-    );
-    
+    // ─── 6. Map ALL upcoming matches (NO league filter) ───
+    const upMap = new Map<number, any>();
     for (const m of upcoming) {
-      if (m.home?.id && !upcomingMatches.has(m.home.id)) upcomingMatches.set(m.home.id, m);
-      if (m.away?.id && !upcomingMatches.has(m.away.id)) upcomingMatches.set(m.away.id, m);
+      if (m.home?.id && !upMap.has(m.home.id)) upMap.set(m.home.id, m);
+      if (m.away?.id && !upMap.has(m.away.id)) upMap.set(m.away.id, m);
     }
+    log("INFO", "Upcoming mapped", { runId, matches: upcoming.length, teams: upMap.size });
 
-    log("INFO", `Upcoming matches mapped`, { runId, matches: upcoming.length, teamsWithMatch: upcomingMatches.size });
+    // ─── 7. Fetch odds for major-league upcoming only ───
+    const oddsMap = new Map<number, Record<string, number>>();
+    const oddsIds = [...new Set(
+      upcoming.filter(m => ODDS_LEAGUE_IDS.has(m.leagueId)).map(m => m.id).filter(Boolean)
+    )].slice(0, 20);
 
-    // ─── Step 6: Fetch odds for upcoming matches ───
-    const matchOddsMap = new Map<number, Record<string, number>>();
-    const uniqueUpcomingIds = [...new Set(upcoming.map((m) => m.id).filter(Boolean))].slice(0, 20);
-
-    if (uniqueUpcomingIds.length > 0) {
-      log("INFO", `Fetching odds for ${uniqueUpcomingIds.length} matches`, { runId });
-      
+    if (oddsIds.length > 0) {
       const oddsResults = await Promise.all(
-        uniqueUpcomingIds.map((eventId) =>
-          rapidApiFetch(`/football-event-odds?eventid=${eventId}`, RAPIDAPI_KEY)
-            .then((data) => ({ eventId, data }))
-            .catch(() => ({ eventId, data: null }))
+        oddsIds.map(eid =>
+          rapidApiFetch(`/football-event-odds?eventid=${eid}`, RAPIDAPI_KEY)
+            .then(d => ({ eid, d })).catch(() => ({ eid, d: null }))
         )
       );
-
-      let oddsSuccessCount = 0;
-      for (const { eventId, data } of oddsResults) {
-        if (!data?.response?.odds || !Array.isArray(data.response.odds)) continue;
-        const parsed: Record<string, number> = {};
-
-        for (const oddGroup of data.response.odds) {
-          if (!oddGroup?.items || !Array.isArray(oddGroup.items)) continue;
-          const isBet365 = oddGroup?.bookmakerId === 2;
-
-          for (const item of oddGroup.items) {
-            const marketName = (item?.name || "").toLowerCase();
-            const values = item?.values || [];
-
-            if (marketName.includes("over/under") || marketName.includes("total goals")) {
-              for (const v of values) {
-                const label = (v?.name || "").toLowerCase();
-                const odd = parseFloat(v?.odd);
-                if (isNaN(odd)) continue;
-                if (label.includes("over 2.5") && (isBet365 || !parsed.over25)) parsed.over25 = odd;
-                if (label.includes("over 1.5") && (isBet365 || !parsed.over15)) parsed.over15 = odd;
+      for (const { eid, d } of oddsResults) {
+        if (!d?.response?.odds || !Array.isArray(d.response.odds)) continue;
+        const p: Record<string, number> = {};
+        for (const g of d.response.odds) {
+          if (!g?.items || !Array.isArray(g.items)) continue;
+          const b365 = g?.bookmakerId === 2;
+          for (const item of g.items) {
+            const n = (item?.name || "").toLowerCase();
+            const vals = item?.values || [];
+            if (n.includes("over/under") || n.includes("total goals")) {
+              for (const v of vals) {
+                const l = (v?.name || "").toLowerCase();
+                const o = parseFloat(v?.odd);
+                if (isNaN(o)) continue;
+                if (l.includes("over 2.5") && (b365 || !p.over25)) p.over25 = o;
+                if (l.includes("over 1.5") && (b365 || !p.over15)) p.over15 = o;
               }
             }
-            if (marketName.includes("both teams") || marketName.includes("btts")) {
-              for (const v of values) {
-                const label = (v?.name || "").toLowerCase();
-                const odd = parseFloat(v?.odd);
-                if (!isNaN(odd) && label.includes("yes") && (isBet365 || !parsed.btts)) parsed.btts = odd;
+            if (n.includes("both teams") || n.includes("btts")) {
+              for (const v of vals) {
+                const o = parseFloat(v?.odd);
+                if (!isNaN(o) && (v?.name || "").toLowerCase().includes("yes")) p.btts = o;
               }
             }
-            if (marketName.includes("full time") || marketName.includes("1x2") || marketName.includes("match result")) {
-              for (const v of values) {
-                const label = (v?.name || "").toLowerCase();
-                const odd = parseFloat(v?.odd);
-                if (isNaN(odd)) continue;
-                if ((label === "1" || label === "home") && (isBet365 || !parsed.homeWin)) parsed.homeWin = odd;
-                if ((label === "2" || label === "away") && (isBet365 || !parsed.awayWin)) parsed.awayWin = odd;
+            if (n.includes("full time") || n.includes("1x2") || n.includes("match result")) {
+              for (const v of vals) {
+                const l = (v?.name || "").toLowerCase();
+                const o = parseFloat(v?.odd);
+                if (isNaN(o)) continue;
+                if ((l === "1" || l === "home") && (b365 || !p.homeWin)) p.homeWin = o;
+                if ((l === "2" || l === "away") && (b365 || !p.awayWin)) p.awayWin = o;
               }
             }
           }
         }
-
-        if (Object.keys(parsed).length > 0) {
-          matchOddsMap.set(eventId, parsed);
-          oddsSuccessCount++;
-        }
+        if (Object.keys(p).length > 0) oddsMap.set(eid, p);
       }
-
-      log("INFO", `Odds fetched`, { runId, requested: uniqueUpcomingIds.length, success: oddsSuccessCount });
+      log("INFO", "Odds fetched", { runId, requested: oddsIds.length, success: oddsMap.size });
     }
 
-    // ─── Step 7: Analyze trends for all teams ───
-    const allOpportunities: Opportunity[] = [];
-    let teamsWithOpportunities = 0;
-    
-    for (const stats of teamStatsMap.values()) {
-      const teamOpps = analyzeTeamTrends(stats, upcomingMatches, matchOddsMap);
-      if (teamOpps.length > 0) {
-        teamsWithOpportunities++;
-        allOpportunities.push(...teamOpps);
-      }
+    // ─── 8. Analyze ALL teams ───
+    const allOpps: Opportunity[] = [];
+    let teamsWithOpps = 0;
+    for (const stats of teamMap.values()) {
+      const nm = upMap.get(stats.teamId);
+      const o = nm ? (oddsMap.get(nm.id) || {}) : {};
+      const to = analyzeTeam(stats, nm, o);
+      if (to.length > 0) { teamsWithOpps++; allOpps.push(...to); }
     }
 
-    log("INFO", `Trends analyzed`, { 
-      runId, 
-      teamsAnalyzed: teamStatsMap.size,
-      teamsWithOpportunities,
-      totalOpportunities: allOpportunities.length 
+    log("INFO", "Analysis done", {
+      runId, teams: teamMap.size, teamsWithUpcoming: upMap.size,
+      teamsWithOpps, totalOpps: allOpps.length,
     });
 
-    // ─── Step 8: Rank by hit ratio, then sample size ───
-    allOpportunities.sort((a, b) => {
-      const ratioA = a.hits / a.sample;
-      const ratioB = b.hits / b.sample;
-      const ratioDiff = ratioB - ratioA;
-      return ratioDiff !== 0 ? ratioDiff : b.sample - a.sample;
-    });
+    // ─── 9. Rank by hits desc, insert top 300 ───
+    allOpps.sort((a, b) => b.hits !== a.hits ? b.hits - a.hits : b.sample - a.sample);
+    const top = allOpps.slice(0, 300);
 
-    const topOpps = allOpportunities.slice(0, 150); // Keep more opportunities
+    // Delete existing
+    await supabase.from("opportunities").delete().gte("id", "00000000-0000-0000-0000-000000000000");
 
-    // ─── Step 9: Replace opportunities in DB ───
-    // Delete all existing opportunities
-    const { error: deleteError } = await supabase
-      .from("opportunities")
-      .delete()
-      .gte("id", "00000000-0000-0000-0000-000000000000");
-    
-    if (deleteError) {
-      log("WARN", "Delete error", { runId, error: deleteError.message });
-    }
-
-    // Insert new opportunities in batches
-    let insertedCount = 0;
-    if (topOpps.length > 0) {
-      for (let i = 0; i < topOpps.length; i += 50) {
-        const batch = topOpps.slice(i, i + 50);
-        const { error: insertError } = await supabase.from("opportunities").insert(batch);
-        if (insertError) {
-          log("ERROR", "Insert error", { runId, error: insertError.message, batch: i });
-        } else {
-          insertedCount += batch.length;
-        }
+    let inserted = 0;
+    for (let i = 0; i < top.length; i += 50) {
+      const batch = top.slice(i, i + 50);
+      const { error } = await supabase.from("opportunities").insert(batch);
+      if (error) {
+        log("ERROR", "Insert err", { runId, error: error.message, batch: i });
+      } else {
+        inserted += batch.length;
       }
     }
 
     const summary = {
-      runId,
-      status: "success",
-      apiCalls: dates.length + uniqueUpcomingIds.length,
-      matchesFetched: topLeagueMatches.length,
+      runId, status: "success",
+      matchesFetched: allMatches.length,
       matchesStored: historyRows.length,
       historyUsed: historyData.length,
-      teamsAnalyzed: teamStatsMap.size,
-      teamsWithUpcoming: upcomingMatches.size,
-      opportunitiesFound: allOpportunities.length,
-      opportunitiesStored: insertedCount,
-      oddsMatches: matchOddsMap.size,
+      teamsAnalyzed: teamMap.size,
+      teamsWithUpcoming: upMap.size,
+      teamsWithOpps,
+      oppsFound: allOpps.length,
+      oppsStored: inserted,
     };
-
-    log("INFO", "=== Analysis complete ===", summary);
+    log("INFO", "=== analyze-trends DONE ===", summary);
 
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    log("ERROR", "analyze-trends failed", { runId, error: e instanceof Error ? e.message : String(e) });
+    log("ERROR", "FAILED", { runId, error: e instanceof Error ? e.message : String(e) });
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error", runId }),
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown", runId }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
