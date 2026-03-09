@@ -196,7 +196,6 @@ function analyzeTeamTrends(
         context: "general",
         hits: bttsCount,
         sample: sampleSize,
-        strength: Math.round(bttsRatio * 100),
         is_hot: bttsRatio >= 0.80,
         odds: realOdds.btts || 1.72,
       });
