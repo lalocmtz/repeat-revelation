@@ -270,7 +270,6 @@ function analyzeTeamTrends(
         context: "general",
         hits: unbeatenCount,
         sample: sampleSize,
-        strength: Math.round(unbeatenRatio * 100),
         is_hot: unbeatenRatio >= 0.85,
         odds: realOdds.homeWin || 1.60,
       });
